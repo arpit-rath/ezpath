@@ -5,6 +5,7 @@ import { ScrollProgress } from './ScrollProgress';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
 import { SkipLink } from '../ui/SkipLink';
+import { PwaInstallBanner } from '../ui/PwaInstallBanner';
 import { liveEventsService } from '../../services/realtime/liveEvents';
 import { useJourneyStore } from '../../stores/journeyStore';
 import { useOperatorStore } from '../../stores/operatorStore';
@@ -45,11 +46,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       <main ref={main} id="main-content" className="flex-1 flex flex-col">
         {children}
       </main>
-      {/* The desktop planner fills the screen, so its footer would hide the panels. */}
-      <div className={pathname === '/plan' ? 'lg:hidden' : undefined}>
-        <Footer />
-      </div>
+      <Footer />
+      {/* Floating PWA Install Banner */}
+      <PwaInstallBanner />
     </div>
   );
 };
-
