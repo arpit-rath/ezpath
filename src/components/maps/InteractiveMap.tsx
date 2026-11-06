@@ -43,7 +43,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Top Floating Map Header Bar - Centered between Floating Panels */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 pointer-events-auto">
-        <div className="hidden md:flex bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-200 shadow-floating items-center gap-2 text-xs font-medium text-ink">
+        <div className="hidden md:flex lg:hidden min-[1320px]:flex bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-200 shadow-floating items-center gap-2 text-xs font-medium text-ink">
           <div className="w-5 h-5 rounded-md bg-emerald-700 text-white flex items-center justify-center font-bold text-[9px]">
             AWS
           </div>
