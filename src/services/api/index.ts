@@ -1,8 +1,7 @@
 import { ApiClient } from './client';
 import { DemoApiAdapter, demoApiAdapter } from './demoAdapter';
 import { AwsApiClient } from './awsClient';
-
-const isDemoMode = import.meta.env.VITE_DEMO_MODE !== 'false';
+import { isDemoMode } from '../../config/runtime';
 
 let activeClient: ApiClient;
 
@@ -17,5 +16,6 @@ export function getApiClient(): ApiClient {
 }
 
 export { demoApiAdapter, DemoApiAdapter, AwsApiClient };
+export { isDemoMode } from '../../config/runtime';
 export * from './client';
 

@@ -43,6 +43,7 @@ export interface RouteStep {
   distanceMeters: number;
   durationMinutes: number;
   stepFree: boolean;
+  accessUnknown?: boolean; // step-free status is not recorded in the source data
   elevationChangeMeters?: number;
   facilityId?: string;
   facilityName?: string;
@@ -66,9 +67,9 @@ export interface RouteLeg {
   wheelchairAccessible: boolean;
   elevatorId?: string;
   elevatorOperational?: boolean;
-  evidenceSource: 'operator_iot' | 'station_audit' | 'municipal_survey' | 'crowdsourced' | 'unknown';
+  evidenceSource: 'operator_iot' | 'station_audit' | 'municipal_survey' | 'crowdsourced' | 'openstreetmap' | 'published_timetable' | 'unknown';
   evidenceTimestamp: string;
-  confidenceScore: number; // 0.0 to 1.0
+  confidenceScore: number | null; // null when confidence has not been measured
   geometry: [number, number][]; // [longitude, latitude]
   steps: RouteStep[];
 }
@@ -101,16 +102,19 @@ export interface JourneyRoute {
   totalDistanceMeters: number;
   walkingDistanceMeters: number;
   totalFareINR: number;
+  fareStatus?: 'complete' | 'partial';
   transfersCount: number;
   transportModes: TransportMode[];
   legs: RouteLeg[];
   isStepFree: boolean;
   isWheelchairAccessible: boolean;
+  accessibilityStatus?: 'verified' | 'uncertain' | 'inaccessible';
   isFeasible: boolean;
   feasibilityReason?: string;
-  reliabilityScore: number; // 0 to 100
+  reliabilityScore: number | null; // null when verification coverage is not measured
   evidenceConfidence: 'high' | 'medium' | 'low';
   explanation: RouteExplanation;
+  dataNotes?: string[];
   geometry: [number, number][]; // Full route line
   departureTime: string;
   arrivalTime: string;
@@ -167,7 +171,8 @@ export interface NetworkNode {
   name: string;
   type: 'station' | 'bus_stop' | 'entrance' | 'platform' | 'intersection' | 'destination';
   coordinates: [number, number]; // [lng, lat]
-  isWheelchairAccessible: boolean;
+  accessibilityStatus?: 'verified' | 'unknown' | 'inaccessible';
+  isWheelchairAccessible: boolean | null;
   hasElevator: boolean;
   hasRamps: boolean;
   hasTactilePaving: boolean;
@@ -187,7 +192,7 @@ export interface NetworkEdge {
   wheelchairAccessible: boolean;
   elevatorId?: string;
   hasStairs: boolean;
-  evidenceSource: 'operator_iot' | 'station_audit' | 'municipal_survey' | 'crowdsourced' | 'unknown';
+  evidenceSource: 'operator_iot' | 'station_audit' | 'municipal_survey' | 'crowdsourced' | 'openstreetmap' | 'unknown';
   lastUpdated: string;
   geometry: [number, number][];
   isOperational: boolean;
@@ -204,6 +209,7 @@ export interface SavedJourney {
   arrivalTime: string;
   totalDurationMinutes: number;
   totalFareINR: number;
+  fareStatus?: 'complete' | 'partial';
   walkingDistanceMeters: number;
   transfersCount: number;
   transportModes: TransportMode[];
@@ -225,5 +231,43 @@ export interface DisruptionDiff {
   stepFreeMaintained: boolean;
   affectedFacilityName: string;
   disruptionReason: string;
+}
+
+export type CommunityReportStatus =
+  | 'AWAITING_UPLOAD'
+  | 'PENDING_REVIEW'
+  | 'VERIFIED'
+  | 'REJECTED';
+
+export type ReportIssueType =
+  | 'lift_outage'
+  | 'path_blocked'
+  | 'entrance_closed'
+  | 'transit_delay'
+  | 'other';
+
+export const REPORT_ISSUES: { id: ReportIssueType; label: string; eventType: DisruptionEvent['type'] }[] = [
+  { id: 'lift_outage', label: 'Lift or escalator not working', eventType: 'elevator_outage' },
+  { id: 'path_blocked', label: 'Path or ramp blocked', eventType: 'path_closure' },
+  { id: 'entrance_closed', label: 'Entrance closed', eventType: 'entrance_closure' },
+  { id: 'transit_delay', label: 'Bus, metro or train problem', eventType: 'service_delay' },
+  { id: 'other', label: 'Something else', eventType: 'service_delay' },
+];
+
+export interface CommunityReport {
+  reportId: string;
+  status: CommunityReportStatus;
+  issueType: ReportIssueType;
+  description: string;
+  locationId: string;
+  locationName: string;
+  latitude: number;
+  longitude: number;
+  photoUrl?: string | null;
+  contentType?: string | null;
+  createdAt: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
 }
 

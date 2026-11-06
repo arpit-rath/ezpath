@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/contracts/disruption-create.schema.json",
+  "title": "Create Disruption Event",
+  "type": "object",
+  "required": [
+    "entityId",
+    "entityName",
+    "type",
+    "severity",
+    "reason",
+    "effectiveStart",
+    "affectedLinesOrStops",
+    "impactOnAccessibility"
+  ],
+  "properties": {
+    "entityId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "entityName": {"type": "string", "minLength": 1, "maxLength": 200},
+    "stationName": {"type": "string", "maxLength": 200},
+    "type": {
+      "type": "string",
+      "enum": ["elevator_outage", "path_closure", "entrance_closure", "service_delay", "bus_cancellation"]
+    },
+    "severity": {"type": "string", "enum": ["critical", "warning", "info"]},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "effectiveStart": {"type": "string", "format": "date-time", "maxLength": 64},
+    "estimatedResolution": {"type": "string", "format": "date-time", "maxLength": 64},
+    "affectedLinesOrStops": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {"type": "string", "minLength": 1, "maxLength": 128}
+    },
+    "impactOnAccessibility": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "isActive": {"const": true}
+  }
+}

@@ -3,12 +3,21 @@
   "$id": "https://example.invalid/contracts/route-response.schema.json",
   "title": "Accessible Routing Response",
   "type": "object",
-  "required": ["request_id", "status", "graph", "snapped_points", "routes", "message"],
+  "required": ["request_id", "status", "graph", "snapped_points", "routes", "status_overlay", "message"],
   "properties": {
     "request_id": {"type": ["string", "null"]},
     "status": {"type": "string", "enum": ["ok", "no_route"]},
     "graph": {"type": "object", "required": ["version", "source", "crs"]},
     "snapped_points": {"type": "object", "required": ["origin", "destination"]},
+    "status_overlay": {
+      "type": "object",
+      "required": ["active_events", "blocking_events", "blocked_entity_ids"],
+      "properties": {
+        "active_events": {"type": "integer", "minimum": 0},
+        "blocking_events": {"type": "integer", "minimum": 0},
+        "blocked_entity_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
     "routes": {"type": "array", "items": {
       "type": "object", "required": ["route_id", "nodes", "edges", "metrics", "accessibility", "geometry", "diagnostics"],
       "properties": {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useJourneyStore } from '../../stores/journeyStore';
-import { DEMO_NODES } from '../../data/demoNetwork';
+import { getCampusLocation, LOCATION_GROUPS } from '../../data/networkLocations';
+import { isDemoMode } from '../../config/runtime';
 import { ProfileBuilder } from '../accessibility/ProfileBuilder';
 import { Button } from '../ui/Button';
 import { 
@@ -28,8 +29,9 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
     searchJourneys,
     isLoading,
     profile,
-    updateProfileConstraint
+    setAllowedModes
   } = useJourneyStore();
+  const campusTrip = !isDemoMode && Boolean(getCampusLocation(originId) && getCampusLocation(destinationId));
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,16 +39,40 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
     if (onSearch) onSearch();
   };
 
-  const toggleMode = (mode: 'bus' | 'train') => {
+  const toggleMode = (mode: 'bus' | 'train' | 'metro') => {
     const current = profile.allowedModes;
     if (current.includes(mode)) {
-      if (current.filter(m => m === 'bus' || m === 'train').length > 1) {
-        updateProfileConstraint('allowedModes', current.filter(m => m !== mode));
+      if (current.filter(m => m !== 'walking').length > 1) {
+        setAllowedModes(current.filter(m => m !== mode));
       }
     } else {
-      updateProfileConstraint('allowedModes', [...current, mode]);
+      setAllowedModes([...current, mode]);
     }
   };
+
+  const locationOptions = LOCATION_GROUPS.map(group => (
+    <optgroup key={group.label} label={group.label}>
+      {group.locations.map(location => (
+        <option key={location.id} value={location.id}>{location.name}</option>
+      ))}
+    </optgroup>
+  ));
+
+  const transitButton = (mode: 'bus' | 'train' | 'metro', label: string, icon: React.ReactNode, isActive: boolean) => (
+    <button
+      type="button"
+      aria-pressed={isActive}
+      onClick={() => toggleMode(mode)}
+      className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-xs font-medium transition-colors ${
+        isActive
+          ? 'bg-blue-50 text-accent border-blue-200 font-semibold'
+          : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
 
   return (
     <form onSubmit={handleSearch} className="space-y-4 p-4 text-ink">
@@ -64,11 +90,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
             onChange={(e) => setOriginId(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 bg-white border border-subtle-border rounded-lg text-xs font-medium text-ink focus:border-accent focus:ring-1 focus:ring-accent"
           >
-            {DEMO_NODES.map(node => (
-              <option key={node.id} value={node.id}>
-                {node.name}
-              </option>
-            ))}
+            {locationOptions}
           </select>
         </div>
 
@@ -78,7 +100,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
             type="button"
             onClick={swapLocations}
             aria-label="Swap starting location and destination"
-            className="p-1 rounded-full bg-slate-100 hover:bg-slate-200 text-ink-muted hover:text-ink transition-colors border border-subtle-border"
+            className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-ink-muted hover:text-ink transition-colors border border-subtle-border"
           >
             <ArrowUpDown className="w-3.5 h-3.5" />
           </button>
@@ -96,11 +118,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
             onChange={(e) => setDestinationId(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 bg-white border border-subtle-border rounded-lg text-xs font-medium text-ink focus:border-accessible focus:ring-1 focus:ring-accessible"
           >
-            {DEMO_NODES.map(node => (
-              <option key={node.id} value={node.id}>
-                {node.name}
-              </option>
-            ))}
+            {locationOptions}
           </select>
         </div>
       </div>
@@ -110,39 +128,28 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
         <label className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">
           Permitted Modes
         </label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {/* Walking always allowed */}
           <div className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg bg-emerald-50 text-accessible border border-emerald-200 text-xs font-medium cursor-not-allowed">
             <Footprints className="w-3.5 h-3.5" />
             <span>Walking</span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => toggleMode('bus')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-xs font-medium transition-colors ${
-              profile.allowedModes.includes('bus')
-                ? 'bg-blue-50 text-accent border-blue-200 font-semibold'
-                : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Bus className="w-3.5 h-3.5" />
-            <span>Bus</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => toggleMode('train')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-xs font-medium transition-colors ${
-              profile.allowedModes.includes('train') || profile.allowedModes.includes('metro')
-                ? 'bg-blue-50 text-accent border-blue-200 font-semibold'
-                : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Train className="w-3.5 h-3.5" />
-            <span>Metro</span>
-          </button>
+          {transitButton('bus', 'Bus', <Bus className="w-3.5 h-3.5" />, profile.allowedModes.includes('bus'))}
+          {isDemoMode
+            ? transitButton('train', 'Metro', <Train className="w-3.5 h-3.5" />, profile.allowedModes.includes('train') || profile.allowedModes.includes('metro'))
+            : <>
+                {transitButton('metro', 'Metro', <Train className="w-3.5 h-3.5" />, profile.allowedModes.includes('metro'))}
+                {transitButton('train', 'Suburban', <Train className="w-3.5 h-3.5" />, profile.allowedModes.includes('train'))}
+              </>}
         </div>
+        {!isDemoMode && (
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            {campusTrip
+              ? 'Both places are on the SRM campus, so this is a walking route and these modes do not apply.'
+              : 'Results update when you change a mode. Times come from published timetables, not live vehicle positions.'}
+          </p>
+        )}
       </div>
 
       {/* Profile Builder Section */}
@@ -150,17 +157,19 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
         <ProfileBuilder />
       </div>
 
-      {/* Primary Submit Action */}
-      <Button
-        type="submit"
-        variant="primary"
-        size="lg"
-        isLoading={isLoading}
-        className="w-full font-semibold shadow-md"
-      >
-        <Search className="w-4 h-4 mr-2" />
-        Find Accessible Routes
-      </Button>
+      {/* Primary Submit Action stays reachable while the form scrolls */}
+      <div className="lg:sticky lg:bottom-0 lg:z-10 lg:-mx-4 lg:-mb-4 lg:border-t lg:border-subtle-border lg:bg-white/95 lg:p-4 lg:backdrop-blur-md">
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          isLoading={isLoading}
+          className="w-full font-semibold shadow-md"
+        >
+          <Search className="w-4 h-4 mr-2" />
+          Find Accessible Routes
+        </Button>
+      </div>
     </form>
   );
 };

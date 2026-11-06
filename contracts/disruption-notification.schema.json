@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/contracts/disruption-notification.schema.json",
+  "title": "Disruption Notification",
+  "type": "object",
+  "required": ["deliveryId", "eventType", "occurredAt", "event"],
+  "properties": {
+    "deliveryId": {"type": "string", "minLength": 1},
+    "eventType": {
+      "type": "string",
+      "enum": ["DISRUPTION_CREATED", "DISRUPTION_UPDATED", "DISRUPTION_RESOLVED"]
+    },
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "event": {"$ref": "disruption-event.schema.json"}
+  }
+}

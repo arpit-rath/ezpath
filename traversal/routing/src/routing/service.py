@@ -5,6 +5,7 @@ from typing import Any
 import math
 from .graph import snap_coordinate
 from .router import route_candidates
+from .status import normalize_blocked_entities
 
 
 class RouteRequestError(ValueError):
@@ -20,7 +21,7 @@ class RoutingService:
         if self.graph_version is None:
             self.graph_version = str(self.graph.graph.get("routing_graph_version", "unspecified"))
 
-    def route(self, payload: dict) -> dict:
+    def route(self, payload: dict, *, blocked_entity_ids=(), status_overlay: dict | None = None) -> dict:
         """Accept the public JSON contract and return JSON-serializable data."""
         try:
             if not isinstance(payload, dict):
@@ -52,7 +53,17 @@ class RoutingService:
                 _number(destination.get("longitude"), "destination.longitude", minimum=-180, maximum=180), max_snap)
             routes = route_candidates(self.graph, origin_snap["node_id"], destination_snap["node_id"],
                 wheelchair_user=wheelchair, unknown_policy=unknown_policy,
-                max_walking_m=max_walk, walking_speed_mps=speed, max_routes=max_routes)
+                max_walking_m=max_walk, walking_speed_mps=speed, max_routes=max_routes,
+                blocked_entity_ids=blocked_entity_ids)
+            normalized_blocked = sorted(normalize_blocked_entities(blocked_entity_ids))
+            overlay = {
+                "active_events": 0,
+                "blocking_events": 0,
+                "blocked_entity_ids": normalized_blocked,
+            }
+            if status_overlay:
+                overlay.update(status_overlay)
+                overlay["blocked_entity_ids"] = normalized_blocked
             return {
                 "request_id": request_id or None,
                 "status": "ok" if routes else "no_route",
@@ -60,6 +71,7 @@ class RoutingService:
                           "crs": str(self.graph.graph.get("crs", "unknown"))},
                 "snapped_points": {"origin": origin_snap, "destination": destination_snap},
                 "routes": routes,
+                "status_overlay": overlay,
                 "message": None if routes else "No route satisfies the supplied constraints and accessibility policy.",
             }
         except RouteRequestError:

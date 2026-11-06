@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "graph_id": "srm-kattankulathur",
+  "attribution": "OpenStreetMap contributors",
+  "locations": [
+    {
+      "id": "srm-library",
+      "name": "SRM Library",
+      "category": "library",
+      "latitude": 12.8232845,
+      "longitude": 80.0425857,
+      "source": {"type": "OpenStreetMap node", "id": "10763076265"}
+    },
+    {
+      "id": "srm-in-gate",
+      "name": "SRM In Gate Bus Stop",
+      "category": "gate",
+      "latitude": 12.823119,
+      "longitude": 80.0410444,
+      "source": {"type": "OpenStreetMap node", "id": "5831452923"}
+    },
+    {
+      "id": "srm-out-gate",
+      "name": "SRM Out Gate Bus Stop",
+      "category": "gate",
+      "latitude": 12.8230145,
+      "longitude": 80.0410429,
+      "source": {"type": "OpenStreetMap node", "id": "5831452922"}
+    },
+    {
+      "id": "srm-java-stop",
+      "name": "SRM Java Bus Stop",
+      "category": "bus_stop",
+      "latitude": 12.8228618,
+      "longitude": 80.044392,
+      "source": {"type": "OpenStreetMap node", "id": "5831452920"}
+    },
+    {
+      "id": "srm-potheri-station-stop",
+      "name": "SRM Potheri Station Stop",
+      "category": "transit_stop",
+      "latitude": 12.8220075,
+      "longitude": 80.0384608,
+      "source": {"type": "OpenStreetMap node", "id": "5831452935"}
+    },
+    {
+      "id": "srm-hospital-stop",
+      "name": "SRM Hospital Bus Stop",
+      "category": "bus_stop",
+      "latitude": 12.8231176,
+      "longitude": 80.0471994,
+      "source": {"type": "OpenStreetMap node", "id": "5831452926"}
+    },
+    {
+      "id": "srm-medical-college-hospital",
+      "name": "SRM Medical College Hospital and Research Centre",
+      "category": "hospital",
+      "latitude": 12.8210402,
+      "longitude": 80.0479585,
+      "source": {"type": "OpenStreetMap node", "id": "6934737010"}
+    },
+    {
+      "id": "srm-global-hospitals",
+      "name": "SRM Global Hospitals",
+      "category": "hospital",
+      "latitude": 12.8235712,
+      "longitude": 80.0480957,
+      "source": {"type": "OpenStreetMap node", "id": "14233280718"}
+    }
+  ]
+}

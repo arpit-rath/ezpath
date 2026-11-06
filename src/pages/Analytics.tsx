@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useOperatorStore } from '../stores/operatorStore';
 import { AccessibilityCharts } from '../components/analytics/AccessibilityCharts';
 import { ArrowLeft, BarChart2, ShieldCheck, Database } from 'lucide-react';
+import { isDemoMode } from '../config/runtime';
 
 export const Analytics: React.FC = () => {
   const { facilities, edges, disruptions } = useOperatorStore();
@@ -29,16 +30,22 @@ export const Analytics: React.FC = () => {
           Accessibility insights
         </h1>
         <p className="product-description">
-          Grounded data metrics derived directly from physical municipal station audits, IoT sensor health, and route constraints.
+          {isDemoMode
+            ? 'Scenario metrics derived from the deterministic demo network.'
+            : 'Production analytics appear only after measured campus audits and facility telemetry are connected.'}
         </p>
       </div>
 
-      <AccessibilityCharts
+      {isDemoMode ? <AccessibilityCharts
         operationalLifts={operationalLifts}
         disruptedLifts={disruptedLifts}
         stepFreeEdges={stepFreeEdges}
         stairsEdges={stairsEdges}
-      />
+      /> : (
+        <div className="workspace-panel text-sm text-ink-secondary">
+          No physical-audit coverage percentage or lift telemetry is currently available. Active operator-reported disruptions: <strong>{disruptions.filter(event => event.isActive).length}</strong>.
+        </div>
+      )}
     </div>
   );
 };

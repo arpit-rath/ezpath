@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -78,3 +78,28 @@
 @media (max-width: 800px) { .product-page { padding-block: 35px 55px; }.operator-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); padding: 0; }.operator-metric { padding: 22px; border-bottom: 1px solid #d3ddcc; }.operator-metric:nth-child(even) { border-right: 0; }.operator-metric:last-child { grid-column: span 2; }.workspace-panel { padding: 22px; }.journey-panel { padding: 24px; }.journey-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px 0; }.journey-metric:nth-child(odd) { padding-left: 0; }.journey-metric:nth-child(even) { border: 0; } }
 @media (max-width: 480px) { .product-page { width: calc(100% - 32px); }.operator-page { gap: 24px; }.operator-actions { gap: 8px; }.workspace-link { padding: 10px; font-size: 11px; }.workspace-panel { padding: 18px; }.scenario-option { padding: 18px; }.journey-panel { padding: 20px; }.journey-metric { padding-right: 10px; }.journey-metric > div:nth-child(2) { font-size: 24px; }.operator-session { font-size: 10px; } }
 @media (prefers-reduced-motion: reduce) { .approach-list { --route-progress: 1 !important; }.page-scroll-progress { display: none; }.scenario-option:hover:not(:disabled) { transform: none; } }
+
+/* Mobile PWA & Touch Optimizations */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .site-header {
+    padding-top: env(safe-area-inset-top);
+  }
+  .mobile-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Prevent auto-zooming on input focus on iOS Safari */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]), 
+  select, 
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Smooth touch scrolling */
+.overflow-y-auto, 
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}

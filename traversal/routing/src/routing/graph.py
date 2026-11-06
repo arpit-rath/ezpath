@@ -46,8 +46,15 @@ def load_graph(path: str = "data/campus.graphml") -> nx.MultiDiGraph:
     graph_path = Path(path)
     if not graph_path.is_file():
         raise FileNotFoundError(f"Graph file not found: {graph_path}. Run scripts/download_graph.py first.")
-    import osmnx as ox
-    graph = ox.load_graphml(graph_path)
+    try:
+        # OSM node IDs are integers. Preserving that type lets OSMnx use its
+        # spatial index after the GraphML artifact is reloaded from S3.
+        graph = nx.read_graphml(graph_path, node_type=int, edge_key_type=int,
+                                force_multigraph=True)
+    except ValueError:
+        # Keep generic/synthetic GraphML files usable when their IDs are not
+        # numeric. snap_coordinate falls back to a deterministic linear scan.
+        graph = nx.read_graphml(graph_path, force_multigraph=True)
     if not isinstance(graph, nx.MultiDiGraph):
         raise TypeError("Loaded graph is not a NetworkX MultiDiGraph")
     if graph.number_of_nodes() == 0 or graph.number_of_edges() == 0:
@@ -92,8 +99,10 @@ def snap_coordinate(graph: nx.MultiDiGraph, latitude: float, longitude: float,
     # synthetic unit tests independent of OSMnx and is O(number of graph nodes).
     try:
         import osmnx as ox
+        if not all(isinstance(candidate, int) for candidate in graph.nodes):
+            raise TypeError("OSMnx nearest_nodes requires integer OSM node IDs")
         node = ox.distance.nearest_nodes(graph, X=longitude, Y=latitude)
-    except ImportError:
+    except (ImportError, TypeError):
         node = min(graph.nodes, key=lambda n: haversine_m(
             latitude, longitude, float(graph.nodes[n]["y"]), float(graph.nodes[n]["x"])))
     node_data = graph.nodes[node]

@@ -1,71 +1,66 @@
-/**
- * Amazon Location Service & MapLibre Integration Adapter
- * Uses OpenStreetMap (OSM) standard tiles by default for instant, dependency-free cartography,
- * with AWS Amazon Location Service integration ready.
- */
-
-export const OSM_STYLE = {
-  version: 8 as const,
-  sources: {
-    'osm-tiles': {
-      type: 'raster' as const,
-      tiles: [
-        'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-      ],
-      tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }
-  },
-  layers: [
-    {
-      id: 'osm-tiles-layer',
-      type: 'raster' as const,
-      source: 'osm-tiles',
-      minzoom: 0,
-      maxzoom: 19
-    }
-  ]
-};
-
 export interface MapConfig {
-  style: any;
+  style: string | null;
+  satelliteStyle: string | null;
+  provider: 'amazon-location';
+  configurationError: string | null;
   defaultCenter: [number, number];
   defaultZoom: number;
   minZoom: number;
   maxZoom: number;
+  maxBounds: [[number, number], [number, number]];
+}
+
+export interface LocationMapOptions {
+  mapName?: string;
+  satelliteMapName?: string;
+  region?: string;
+  apiKey?: string;
+  demoMode?: boolean;
 }
 
 export class LocationMapAdapter {
-  private mapName: string;
-  private region: string;
+  private readonly mapName?: string;
+  private readonly satelliteMapName?: string;
+  private readonly region?: string;
+  private readonly apiKey?: string;
 
-  constructor() {
-    this.mapName = import.meta.env.VITE_LOCATION_MAP_NAME || 'AccessPathDefaultMap';
-    this.region = import.meta.env.VITE_AWS_REGION || 'ap-south-1';
+  constructor(options: LocationMapOptions = {}) {
+    this.mapName = options.mapName ?? import.meta.env.VITE_LOCATION_MAP_NAME;
+    this.satelliteMapName = options.satelliteMapName ?? import.meta.env.VITE_LOCATION_SATELLITE_MAP_NAME;
+    this.region = options.region ?? import.meta.env.VITE_AWS_REGION;
+    this.apiKey = options.apiKey ?? import.meta.env.VITE_LOCATION_API_KEY;
   }
 
   getMapConfig(): MapConfig {
-    const hasAwsConfig = Boolean(import.meta.env.VITE_LOCATION_MAP_NAME && import.meta.env.VITE_AWS_REGION);
-
-    // If AWS credentials / Amazon Location map is configured, use AWS style descriptor URL;
-    // otherwise use high-speed direct OpenStreetMap (OSM) tiles
-    const style = hasAwsConfig 
-      ? `https://maps.geo.${this.region}.amazonaws.com/maps/v0/maps/${this.mapName}/style-descriptor`
-      : OSM_STYLE;
+    const hasAwsConfig = Boolean(this.mapName && this.region && this.apiKey);
+    const styleUrl = (name?: string) => (hasAwsConfig && name
+      ? `https://maps.geo.${this.region}.amazonaws.com/maps/v0/maps/${encodeURIComponent(
+          name,
+        )}/style-descriptor?key=${encodeURIComponent(this.apiKey!)}`
+      : null);
+    const style = styleUrl(this.mapName);
 
     return {
       style,
-      defaultCenter: [77.2300, 28.6350], // Centered around Delhi multimodal corridor
-      defaultZoom: 13.5,
-      minZoom: 10,
-      maxZoom: 18,
+      satelliteStyle: styleUrl(this.satelliteMapName),
+      provider: 'amazon-location',
+      configurationError: hasAwsConfig
+        ? null
+        : 'Amazon Location is not configured for this build. Add the map name, AWS Region, and browser API key.',
+      defaultCenter: [80.14, 12.95],
+      defaultZoom: 10,
+      minZoom: 8.5,
+      maxZoom: 19,
+      maxBounds: [
+        [79.5, 12.3],
+        [80.7, 13.7],
+      ],
     };
   }
 
-  /**
-   * Helper to calculate a bounding box for a set of GeoJSON coordinates
-   */
-  calculateBounds(coordinates: [number, number][]): [[number, number], [number, number]] | null {
+  calculateBounds(
+    coordinates: [number, number][],
+  ): [[number, number], [number, number]] | null {
     if (!coordinates || coordinates.length === 0) return null;
 
     let minLng = Infinity;
@@ -80,13 +75,12 @@ export class LocationMapAdapter {
       if (lat > maxLat) maxLat = lat;
     }
 
-    // Add padding
     const lngPadding = (maxLng - minLng) * 0.1 || 0.005;
     const latPadding = (maxLat - minLat) * 0.1 || 0.005;
 
     return [
       [minLng - lngPadding, minLat - latPadding],
-      [maxLng + lngPadding, maxLat + latPadding]
+      [maxLng + lngPadding, maxLat + latPadding],
     ];
   }
 }

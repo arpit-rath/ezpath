@@ -28,6 +28,7 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
   if (!isOpen || !route) return null;
 
   const { explanation } = route;
+  const isUncertain = route.accessibilityStatus === 'uncertain';
 
   return (
     <div 
@@ -68,18 +69,24 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
         <div className="p-6 overflow-y-auto space-y-6 text-ink">
           {/* Summary Banner */}
           <div className={`p-4 rounded-xl border flex items-start gap-3 ${
-            route.isFeasible 
+            route.isFeasible && !isUncertain
               ? 'bg-emerald-50/80 border-emerald-200 text-accessible' 
+              : isUncertain
+              ? 'bg-amber-50/80 border-amber-200 text-warning'
               : 'bg-rose-50/80 border-rose-200 text-disruption'
           }`}>
-            {route.isFeasible ? (
+            {route.isFeasible && !isUncertain ? (
               <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
             ) : (
               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
             )}
             <div className="text-xs space-y-1">
               <div className="font-bold text-sm">
-                {route.isFeasible ? 'All Required Accessibility Criteria Satisfied' : 'Requirement Violation Detected'}
+                {isUncertain
+                  ? 'Route Allowed with Unverified Accessibility Evidence'
+                  : route.isFeasible
+                  ? 'All Required Accessibility Criteria Satisfied'
+                  : 'Requirement Violation Detected'}
               </div>
               <p className="text-slate-700 leading-relaxed">
                 {explanation.summary}
@@ -164,7 +171,9 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
               <span>Transparent Accessibility Scoring</span>
             </div>
             <p className="text-[11px] leading-relaxed">
-              Ezpath does not guess or assume accessibility. Every leg of this itinerary has been checked against physical station audits, municipal telemetry, and IoT lift status sensors.
+              {route.accessibilityStatus
+                ? 'Ezpath uses recorded OpenStreetMap tags and the current operator disruption overlay. Missing tags remain unverified, and tag-supported results do not imply an on-site physical audit.'
+                : 'Ezpath does not guess or assume accessibility. Demo evidence is evaluated against the scenario network and its simulated facility status.'}
             </p>
           </div>
         </div>

@@ -10,6 +10,7 @@ from typing import Any
 import networkx as nx
 from .accessibility import evaluate_edge, get_tag
 from .graph import haversine_m
+from .status import edge_is_blocked, node_is_blocked, normalize_blocked_entities
 
 
 @dataclass
@@ -44,6 +45,23 @@ def _edge_minutes(data: dict, speed_mps: float) -> float:
         except (TypeError, ValueError):
             pass
     return _edge_length(data) / speed_mps / 60.0
+
+
+def _edge_points(geometry: Any) -> list[list[float]]:
+    """Read edge geometry from a shapely line or the WKT text stored in GraphML."""
+    if geometry is None:
+        return []
+    if hasattr(geometry, "coords"):
+        return [[float(x), float(y)] for x, y in geometry.coords]
+    text = str(geometry).strip()
+    if not text.upper().startswith("LINESTRING") or "(" not in text:
+        return []
+    points = []
+    for pair in text[text.index("(") + 1:text.rindex(")")].split(","):
+        values = pair.split()
+        if len(values) >= 2:
+            points.append([float(values[0]), float(values[1])])
+    return points
 
 
 def _dominates(a: Label, b: Label, eps: float = 1e-9) -> bool:
@@ -84,7 +102,8 @@ def _edge_assessment(data: dict, wheelchair_user: bool, unknown_policy: str) -> 
 def _reconstruct_and_validate(graph: nx.MultiDiGraph, label: Label,
                               *, wheelchair_user: bool, unknown_policy: str,
                               walking_speed_mps: float, expansions: int,
-                              search_complete: bool, label_cap_hit: bool) -> dict:
+                              search_complete: bool, label_cap_hit: bool,
+                              blocked_entity_ids: frozenset[str]) -> dict:
     nodes = [label.path[0][0]] if label.path else [label.node]
     nodes.extend(v for _, v, _ in label.path)
     if len(nodes) != len(label.path) + 1:
@@ -99,6 +118,10 @@ def _reconstruct_and_validate(graph: nx.MultiDiGraph, label: Label,
         if not graph.has_edge(u, v, key):
             raise RuntimeError(f"ROUTE_EDGE_MISSING: reconstructed edge {(u, v, key)!r} is absent")
         data = graph.edges[u, v, key]
+        if edge_is_blocked(blocked_entity_ids, u, v, key, data):
+            raise RuntimeError(f"ROUTE_CONTAINS_DISRUPTED_EDGE: {(u, v, key)!r}")
+        if node_is_blocked(blocked_entity_ids, v, graph.nodes[v]):
+            raise RuntimeError(f"ROUTE_CONTAINS_DISRUPTED_NODE: {v!r}")
         allowed, penalty, status, reason = _edge_assessment(data, wheelchair_user, unknown_policy)
         if not allowed:
             raise RuntimeError(f"ROUTE_CONTAINS_FORBIDDEN_EDGE: {(u, v, key)!r}")
@@ -118,10 +141,8 @@ def _reconstruct_and_validate(graph: nx.MultiDiGraph, label: Label,
                          ("wheelchair", "highway", "surface", "smoothness", "incline", "kerb", "width")
                          if get_tag(data, tag) != "unknown"},
         })
-        geom = data.get("geometry")
-        if geom is not None and hasattr(geom, "coords"):
-            segment = [[float(x), float(y)] for x, y in geom.coords]
-        else:
+        segment = _edge_points(data.get("geometry"))
+        if not segment:
             segment = [[float(graph.nodes[u]["x"]), float(graph.nodes[u]["y"])],
                        [float(graph.nodes[v]["x"]), float(graph.nodes[v]["y"])]]
         # OSMnx edge geometry normally follows u->v; guard against reversed geometry.
@@ -171,7 +192,8 @@ def route_candidates(graph: nx.MultiDiGraph, start: Any, goal: Any, *,
                      wheelchair_user: bool = True, unknown_policy: str = "strict",
                      max_walking_m: float = 3000.0, walking_speed_mps: float = 1.0,
                      max_routes: int = 3, max_expansions: int = 250_000,
-                     max_labels_per_node: int = 100) -> list[dict]:
+                     max_labels_per_node: int = 100,
+                     blocked_entity_ids: Any = ()) -> list[dict]:
     """Return up to N Pareto alternatives. Search is bounded by expansion/label caps."""
     if not isinstance(graph, nx.MultiDiGraph):
         raise TypeError("Routing requires a directed NetworkX MultiDiGraph")
@@ -185,12 +207,18 @@ def route_candidates(graph: nx.MultiDiGraph, start: Any, goal: Any, *,
         raise ValueError("walking_speed_mps must be positive and finite")
     if max_routes < 1 or max_expansions < 1 or max_labels_per_node < 1:
         raise ValueError("Search limits must be positive integers")
+    blocked = normalize_blocked_entities(blocked_entity_ids)
+    if node_is_blocked(blocked, start, graph.nodes[start]) or node_is_blocked(
+        blocked, goal, graph.nodes[goal]
+    ):
+        return []
 
     if start == goal:
         zero = Label(start, 0, 0, 0, 0, ())
         return [_reconstruct_and_validate(graph, zero, wheelchair_user=wheelchair_user,
                     unknown_policy=unknown_policy, walking_speed_mps=walking_speed_mps,
-                    expansions=0, search_complete=True, label_cap_hit=False)]
+                    expansions=0, search_complete=True, label_cap_hit=False,
+                    blocked_entity_ids=blocked)]
 
     labels_at: dict[Any, list[Label]] = {node: [] for node in graph.nodes}
     initial = Label(start, 0.0, 0.0, 0.0, 0, ())
@@ -211,7 +239,11 @@ def route_candidates(graph: nx.MultiDiGraph, start: Any, goal: Any, *,
             _insert_nondominated(goals, current)
             continue
         for neighbor, keyed_edges in graph[current.node].items():
+            if node_is_blocked(blocked, neighbor, graph.nodes[neighbor]):
+                continue
             for edge_key, data in keyed_edges.items():
+                if edge_is_blocked(blocked, current.node, neighbor, edge_key, data):
+                    continue
                 allowed, penalty, status, _ = _edge_assessment(data, wheelchair_user, unknown_policy)
                 if not allowed:
                     continue
@@ -249,4 +281,5 @@ def route_candidates(graph: nx.MultiDiGraph, start: Any, goal: Any, *,
     return [_reconstruct_and_validate(graph, item, wheelchair_user=wheelchair_user,
                 unknown_policy=unknown_policy, walking_speed_mps=walking_speed_mps,
                 expansions=expansions, search_complete=search_complete,
-                label_cap_hit=label_cap_hit) for item in results[:max_routes]]
+                label_cap_hit=label_cap_hit,
+                blocked_entity_ids=blocked) for item in results[:max_routes]]

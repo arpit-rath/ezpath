@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { FacilityStatus, DisruptionEvent, NetworkNode, NetworkEdge } from '../types';
 import { demoApiAdapter } from '../services/api/demoAdapter';
+import { getApiClient } from '../services/api';
 import { liveEventsService } from '../services/realtime/liveEvents';
 import { DEMO_SCENARIOS } from '../data/demoNetwork';
+import { isDemoMode } from '../config/runtime';
 
 interface OperatorState {
   nodes: NetworkNode[];
@@ -11,6 +13,7 @@ interface OperatorState {
   disruptions: DisruptionEvent[];
   selectedScenarioId: string;
   isSimulating: boolean;
+  loadError: string | null;
 
   // Actions
   loadNetworkData: () => Promise<void>;
@@ -26,21 +29,29 @@ export const useOperatorStore = create<OperatorState>((set, get) => ({
   edges: [],
   facilities: [],
   disruptions: [],
-  selectedScenarioId: 'scenario_1',
+  selectedScenarioId: isDemoMode ? 'scenario_1' : '',
   isSimulating: false,
+  loadError: null,
 
   loadNetworkData: async () => {
-    const data = await demoApiAdapter.getNetworkEntities();
-    const disruptions = await demoApiAdapter.getActiveEvents();
-    set({
-      nodes: data.nodes,
-      edges: data.edges,
-      facilities: data.facilities,
-      disruptions
-    });
+    const client = getApiClient();
+    const [data, disruptions] = await Promise.allSettled([
+      client.getNetworkEntities(),
+      client.getActiveEvents(),
+    ]);
+    set((state) => ({
+      nodes: data.status === 'fulfilled' ? data.value.nodes : state.nodes,
+      edges: data.status === 'fulfilled' ? data.value.edges : state.edges,
+      facilities: data.status === 'fulfilled' ? data.value.facilities : state.facilities,
+      disruptions: disruptions.status === 'fulfilled' ? disruptions.value : state.disruptions,
+      loadError: disruptions.status === 'rejected'
+        ? 'Live disruption data could not be loaded, so this list may be out of date.'
+        : null,
+    }));
   },
 
   applyScenario: async (scenarioId: string) => {
+    if (!isDemoMode) return;
     set({ isSimulating: true });
     await demoApiAdapter.applyScenario(scenarioId);
     liveEventsService.broadcastUpdate();
@@ -49,6 +60,7 @@ export const useOperatorStore = create<OperatorState>((set, get) => ({
   },
 
   triggerElevatorFailure: async (elevatorId = 'elev_a1') => {
+    if (!isDemoMode) return;
     set({ isSimulating: true });
     await demoApiAdapter.createEvent({
       entityId: elevatorId,
@@ -69,18 +81,19 @@ export const useOperatorStore = create<OperatorState>((set, get) => ({
   },
 
   createDisruption: async (disruptionData) => {
-    await demoApiAdapter.createEvent(disruptionData);
+    await getApiClient().createEvent(disruptionData);
     liveEventsService.broadcastUpdate();
     await get().loadNetworkData();
   },
 
   resolveDisruption: async (id: string) => {
-    await demoApiAdapter.resolveEvent(id);
+    await getApiClient().resolveEvent(id);
     liveEventsService.broadcastUpdate();
     await get().loadNetworkData();
   },
 
   resetDemo: async () => {
+    if (!isDemoMode) return;
     set({ isSimulating: true });
     await demoApiAdapter.resetDemo();
     liveEventsService.broadcastUpdate();

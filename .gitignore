@@ -3,10 +3,28 @@ node_modules
 .pnp
 .pnp.js
 
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest-tmp/
+.pytest_tmp*/
+/cache/
+traversal/routing/cache/*.json
+
+# Generated routing artifacts (published to the versioned S3 graph bucket)
+traversal/routing/data/*
+!traversal/routing/data/.gitkeep
+
 # Production build output
 dist
 dist-ssr
 *.tsbuildinfo
+.build/
+infra/cdk.out
+infra/dist
+infra/cdk-outputs.json
+ezpath-web.zip
 
 # Environment files
 .env
@@ -14,6 +32,7 @@ dist-ssr
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
 
 # Editor and agent directories
 .agent

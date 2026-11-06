@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/contracts/disruption-event.schema.json",
+  "title": "Disruption Event",
+  "allOf": [
+    {"$ref": "disruption-create.schema.json"},
+    {
+      "type": "object",
+      "required": ["id", "isActive"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "isActive": {"type": "boolean"}
+      }
+    }
+  ]
+}

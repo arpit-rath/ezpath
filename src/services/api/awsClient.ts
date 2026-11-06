@@ -1,115 +1,188 @@
-import { ApiClient, RouteSearchResult, ReplanResult, NetworkEntitiesResult } from './client';
-import { JourneySearchRequest, DisruptionEvent } from '../../types';
+import { ApiClient, NetworkEntitiesResult, ReplanResult, RouteSearchResult } from './client';
+import { DisruptionDiff, DisruptionEvent, JourneyRoute, JourneySearchRequest } from '../../types';
+import { CAMPUS_NETWORK_NODES } from '../../data/networkLocations';
+import { authService } from '../auth/cognito';
+import {
+  AwsRouteResponse,
+  buildAwsRouteRequest,
+  mapAwsRouteResponse,
+} from './awsContract';
+import {
+  AwsJourneyResponse,
+  buildAwsJourneyRequest,
+  isCampusPair,
+  mapAwsJourneyResponse,
+} from './awsJourneyContract';
+
+type FetchLike = typeof fetch;
+
+interface AwsApiClientOptions {
+  baseUrl?: string;
+  fetchImpl?: FetchLike;
+  getToken?: () => string | null;
+  requestId?: () => string;
+}
+
+interface AwsHealthResponse {
+  status: string;
+  graph_version: string;
+  nodes?: number;
+  edges?: number;
+}
+
+function defaultRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `journey-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export class AwsApiClient implements ApiClient {
-  private baseUrl: string;
-  private region: string;
+  private readonly baseUrl: string;
+  private readonly fetchImpl: FetchLike;
+  private readonly getToken: () => string | null;
+  private readonly requestId: () => string;
+  private readonly knownRoutes = new Map<string, JourneyRoute>();
+  private graphVersion = 'unknown';
 
-  constructor() {
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.accesspath.transit.aws.internal';
-    this.region = import.meta.env.VITE_AWS_REGION || 'ap-south-1';
+  constructor(options: AwsApiClientOptions = {}) {
+    const configuredBaseUrl = options.baseUrl ?? import.meta.env.VITE_API_BASE_URL;
+    if (!configuredBaseUrl) {
+      throw new Error('VITE_API_BASE_URL is required when VITE_DEMO_MODE=false.');
+    }
+    this.baseUrl = configuredBaseUrl.replace(/\/+$/, '');
+    this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
+    this.getToken = options.getToken ?? (() => authService.getAccessToken());
+    this.requestId = options.requestId ?? defaultRequestId;
   }
 
-  private async getAuthHeaders(): Promise<HeadersInit> {
-    const token = localStorage.getItem('accesspath_cognito_token');
+  private getAuthHeaders(): HeadersInit {
+    const token = this.getToken();
     return {
       'Content-Type': 'application/json',
-      'X-Aws-Region': this.region,
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
   }
 
-  async searchRoutes(request: JourneySearchRequest): Promise<RouteSearchResult> {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/v1/routes/search`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request)
+  private async requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      ...init,
+      headers: { ...this.getAuthHeaders(), ...(init.headers ?? {}) },
     });
-    if (!response.ok) {
-      throw new Error(`AWS Route Search failed with status: ${response.status}`);
+    const text = await response.text();
+    let payload: any = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        throw new Error(`AWS API returned invalid JSON with status ${response.status}.`);
+      }
     }
-    return response.json();
+    if (!response.ok) {
+      const detail = payload?.error?.message || payload?.message || `request failed with status ${response.status}`;
+      throw new Error(detail);
+    }
+    return payload as T;
+  }
+
+  async searchRoutes(request: JourneySearchRequest): Promise<RouteSearchResult> {
+    if (!isCampusPair(request.originId, request.destinationId)) {
+      return this.searchJourneys(request);
+    }
+    const canonicalRequest = buildAwsRouteRequest(request, this.requestId());
+    const response = await this.requestJson<AwsRouteResponse>('/v1/routes', {
+      method: 'POST',
+      body: JSON.stringify(canonicalRequest),
+    });
+    const searchTimestamp = new Date().toISOString();
+    const routes = mapAwsRouteResponse(response, request, searchTimestamp);
+    this.graphVersion = response.graph.version;
+    for (const route of routes) this.knownRoutes.set(route.id, route);
+    return {
+      routes,
+      searchTimestamp,
+      graphVersion: response.graph.version,
+      message: response.message,
+    };
+  }
+
+  private async searchJourneys(request: JourneySearchRequest): Promise<RouteSearchResult> {
+    const response = await this.requestJson<AwsJourneyResponse>('/v1/journeys', {
+      method: 'POST',
+      body: JSON.stringify(buildAwsJourneyRequest(request, this.requestId())),
+    });
+    const searchTimestamp = new Date().toISOString();
+    const routes = mapAwsJourneyResponse(response, request, searchTimestamp);
+    for (const route of routes) this.knownRoutes.set(route.id, route);
+    return { routes, searchTimestamp, graphVersion: this.graphVersion, message: response.message, decision: response.decision };
   }
 
   async replanRoute(routeId: string, request: JourneySearchRequest): Promise<ReplanResult> {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/v1/routes/${encodeURIComponent(routeId)}/replan`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request)
-    });
-    if (!response.ok) {
-      throw new Error(`AWS Route Replanning failed with status: ${response.status}`);
+    const previousRoute = this.knownRoutes.get(routeId);
+    if (!previousRoute) {
+      throw new Error('The previous route is no longer available. Search again before replanning.');
     }
-    return response.json();
+    const result = await this.searchRoutes(request);
+    const newRoute = result.routes[0];
+    if (!newRoute) {
+      throw new Error(result.message || 'No route satisfies the current accessibility constraints.');
+    }
+    const diff: DisruptionDiff = {
+      previousRoute,
+      newRoute,
+      durationChangeMinutes: Number((newRoute.totalDurationMinutes - previousRoute.totalDurationMinutes).toFixed(2)),
+      fareChangeINR: newRoute.totalFareINR - previousRoute.totalFareINR,
+      walkingDistanceChangeMeters: Number((newRoute.walkingDistanceMeters - previousRoute.walkingDistanceMeters).toFixed(1)),
+      transfersChange: newRoute.transfersCount - previousRoute.transfersCount,
+      stepFreeMaintained: newRoute.accessibilityStatus === 'verified',
+      affectedFacilityName: 'Current network disruption',
+      disruptionReason: 'Route recalculated against the latest active-event overlay.',
+    };
+    return { previousRoute, newRoute, diff, success: true };
   }
 
   async getNetworkEntities(): Promise<NetworkEntitiesResult> {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/v1/network/entities`, {
-      method: 'GET',
-      headers
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch AWS network entities: ${response.status}`);
+    if (this.graphVersion === 'unknown') {
+      try {
+        await this.getHealth();
+      } catch {
+        // Location selection remains available while backend health recovers.
+      }
     }
-    return response.json();
+    return {
+      nodes: CAMPUS_NETWORK_NODES,
+      edges: [],
+      facilities: [],
+      graphVersion: this.graphVersion,
+    };
   }
 
   async getActiveEvents(): Promise<DisruptionEvent[]> {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/v1/events/active`, {
-      method: 'GET',
-      headers
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch AWS active events: ${response.status}`);
-    }
-    return response.json();
+    return this.requestJson<DisruptionEvent[]>('/v1/events/active', { method: 'GET' });
   }
 
   async createEvent(event: Omit<DisruptionEvent, 'id'>): Promise<DisruptionEvent> {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/v1/events`, {
+    return this.requestJson<DisruptionEvent>('/v1/events', {
       method: 'POST',
-      headers,
-      body: JSON.stringify(event)
+      body: JSON.stringify(event),
     });
-    if (!response.ok) {
-      throw new Error(`Failed to create disruption event on AWS: ${response.status}`);
-    }
-    return response.json();
   }
 
   async resolveEvent(eventId: string): Promise<boolean> {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/v1/events/${encodeURIComponent(eventId)}/resolve`, {
-      method: 'POST',
-      headers
-    });
-    return response.ok;
+    const result = await this.requestJson<{ resolved: boolean }>(
+      `/v1/events/${encodeURIComponent(eventId)}/resolve`,
+      { method: 'POST' },
+    );
+    return result.resolved === true;
   }
 
   async resetDemo(): Promise<boolean> {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/v1/demo/reset`, {
-      method: 'POST',
-      headers
-    });
-    return response.ok;
+    return false;
   }
 
   async getHealth(): Promise<{ status: string; mode: 'demo' | 'aws'; version: string }> {
-    try {
-      const response = await fetch(`${this.baseUrl}/health`);
-      if (response.ok) {
-        return { status: 'healthy', mode: 'aws', version: '1.0.0-aws' };
-      }
-    } catch {
-      // Fallback
-    }
-    return { status: 'unreachable', mode: 'aws', version: '1.0.0-aws' };
+    const health = await this.requestJson<AwsHealthResponse>('/health', { method: 'GET' });
+    this.graphVersion = health.graph_version;
+    return { status: health.status, mode: 'aws', version: health.graph_version };
   }
 }
-

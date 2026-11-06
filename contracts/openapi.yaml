@@ -1,0 +1,208 @@
+openapi: 3.1.0
+info:
+  title: EzPath Routing API
+  version: 0.1.0
+  description: >-
+    Versioned boundary between the EzPath browser applications and the
+    deterministic accessibility-routing service. The first implementation
+    supports the bounded walking graph; multimodal fields will be added only
+    after the routing core supports them.
+servers:
+  - url: https://{apiId}.execute-api.{region}.amazonaws.com
+    variables:
+      apiId:
+        default: example
+      region:
+        default: ap-south-1
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service and graph health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /v1/routes:
+    post:
+      operationId: createRoute
+      summary: Find accessibility-aware walking-route alternatives
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteRequest"
+      responses:
+        "200":
+          description: Route search completed, including a valid no-route result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteResponse"
+        "400":
+          description: Malformed request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Coordinates cannot be snapped within the requested limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Live disruption status is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/journeys:
+    post:
+      operationId: createJourney
+      summary: Plan Chennai journeys across bus, metro, suburban rail and walking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JourneyRequest"
+      responses:
+        "200":
+          description: Journey search completed, including a valid no-route result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyResponse"
+        "400":
+          description: Malformed request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Live status or transit data is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/events/active:
+    get:
+      operationId: listActiveDisruptions
+      summary: List active accessibility disruptions
+      responses:
+        "200":
+          description: Active disruptions ordered by effective start time
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DisruptionEvent"
+  /v1/events:
+    post:
+      operationId: createDisruption
+      summary: Create an operator-reported accessibility disruption
+      security:
+        - operatorJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisruptionCreate"
+      responses:
+        "201":
+          description: Disruption created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisruptionEvent"
+        "400":
+          description: Invalid disruption input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid operator token
+  /v1/events/{eventId}/resolve:
+    post:
+      operationId: resolveDisruption
+      summary: Mark an active accessibility disruption as resolved
+      security:
+        - operatorJwt: []
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+      responses:
+        "200":
+          description: Disruption resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resolved, event]
+                properties:
+                  resolved:
+                    const: true
+                  event:
+                    $ref: "#/components/schemas/DisruptionEvent"
+        "401":
+          description: Missing or invalid operator token
+        "404":
+          description: Event was not found or was already resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    operatorJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RouteRequest:
+      $ref: ../traversal/routing/contracts/route-request.schema.json
+    RouteResponse:
+      $ref: ../traversal/routing/contracts/route-response.schema.json
+    JourneyRequest:
+      $ref: ../traversal/routing/contracts/journey-request.schema.json
+    JourneyResponse:
+      $ref: ../traversal/routing/contracts/journey-response.schema.json
+    DisruptionCreate:
+      $ref: ./disruption-create.schema.json
+    DisruptionEvent:
+      $ref: ./disruption-event.schema.json
+    HealthResponse:
+      type: object
+      required: [status, graph_version]
+      properties:
+        status:
+          type: string
+        graph_version:
+          type: string
+        nodes:
+          type: integer
+        edges:
+          type: integer
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string

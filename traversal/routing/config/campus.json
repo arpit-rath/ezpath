@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "graph_id": "srm-kattankulathur",
+  "name": "SRM Institute of Science and Technology, Kattankulathur",
+  "center": {
+    "latitude": 12.8234361,
+    "longitude": 80.0450412
+  },
+  "radius_m": 1300,
+  "network_type": "walk",
+  "graph_object_key": "graphs/campus.graphml",
+  "source": "OpenStreetMap via OSMnx",
+  "source_url": "https://www.openstreetmap.org/copyright",
+  "license": "Open Database License (ODbL)"
+}

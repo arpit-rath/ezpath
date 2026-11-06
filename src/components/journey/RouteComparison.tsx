@@ -1,4 +1,5 @@
 import React from 'react';
+import { fareLabel } from '../../utils/fare';
 import { JourneyRoute } from '../../types';
 import { 
   X, 
@@ -92,7 +93,7 @@ export const RouteComparison: React.FC<RouteComparisonProps> = ({
                 </td>
                 {routes.map(route => (
                   <td key={route.id} className="py-3 px-4 font-heading font-bold text-sm text-ink">
-                    {route.totalDurationMinutes} min
+                    {Math.round(route.totalDurationMinutes)} min
                   </td>
                 ))}
               </tr>
@@ -104,7 +105,7 @@ export const RouteComparison: React.FC<RouteComparisonProps> = ({
                 </td>
                 {routes.map(route => (
                   <td key={route.id} className="py-3 px-4 font-heading font-bold text-sm text-ink">
-                    ₹{route.totalFareINR}
+                    {fareLabel(route.totalFareINR, route.fareStatus)}
                   </td>
                 ))}
               </tr>
@@ -116,7 +117,7 @@ export const RouteComparison: React.FC<RouteComparisonProps> = ({
                 </td>
                 {routes.map(route => (
                   <td key={route.id} className="py-3 px-4 font-semibold text-ink">
-                    {route.walkingDistanceMeters} m
+                    {Math.round(route.walkingDistanceMeters)} m
                   </td>
                 ))}
               </tr>
@@ -140,9 +141,13 @@ export const RouteComparison: React.FC<RouteComparisonProps> = ({
                 </td>
                 {routes.map(route => (
                   <td key={route.id} className="py-3 px-4">
-                    {route.isStepFree ? (
+                    {(route.accessibilityStatus ?? (route.isStepFree ? 'verified' : 'inaccessible')) === 'verified' ? (
                       <span className="inline-flex items-center gap-1 font-semibold text-accessible">
-                        <CheckCircle2 className="w-4 h-4" /> Verified Step-free
+                        <CheckCircle2 className="w-4 h-4" /> {route.accessibilityStatus ? 'Tag-supported' : 'Verified Step-free'}
+                      </span>
+                    ) : route.accessibilityStatus === 'uncertain' ? (
+                      <span className="inline-flex items-center gap-1 font-semibold text-warning">
+                        <AlertTriangle className="w-4 h-4" /> Unverified
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 font-semibold text-disruption">
@@ -160,7 +165,7 @@ export const RouteComparison: React.FC<RouteComparisonProps> = ({
                 </td>
                 {routes.map(route => (
                   <td key={route.id} className="py-3 px-4 font-semibold text-ink">
-                    {route.reliabilityScore}% verified
+                    {route.reliabilityScore === null ? 'Not measured' : `${route.reliabilityScore}% verified`}
                   </td>
                 ))}
               </tr>

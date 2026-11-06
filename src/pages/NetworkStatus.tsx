@@ -4,6 +4,7 @@ import { useOperatorStore } from '../stores/operatorStore';
 import { FacilityStatusTable } from '../components/analytics/FacilityStatusTable';
 import { ArrowLeft, Server, Activity, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { isDemoMode } from '../config/runtime';
 
 export const NetworkStatus: React.FC = () => {
   const { facilities, triggerElevatorFailure, resolveDisruption, disruptions, isSimulating } = useOperatorStore();
@@ -35,15 +36,21 @@ export const NetworkStatus: React.FC = () => {
           Network infrastructure
         </h1>
         <p className="product-description">
-          Real-time IoT operational telemetry for all elevators, wheelchair ramps, and stairs across the multimodal corridor.
+          {isDemoMode
+            ? 'Scenario facility status for elevators, ramps, and stairs across the demo corridor.'
+            : 'Operator-reported campus disruptions. A verified facility inventory and IoT telemetry feed have not yet been connected.'}
         </p>
       </div>
 
-      <FacilityStatusTable
+      {facilities.length > 0 ? <FacilityStatusTable
         facilities={facilities}
         onToggleFacility={handleToggleFacility}
         isLoading={isSimulating}
-      />
+      /> : (
+        <div className="workspace-panel text-sm text-ink-secondary">
+          No verified production facility records are available yet. Use the operator dashboard to report an outage against an exact graph identifier.
+        </div>
+      )}
     </div>
   );
 };

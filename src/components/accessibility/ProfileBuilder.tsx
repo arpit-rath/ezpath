@@ -11,6 +11,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { MobilityProfileId } from '../../types';
+import { isDemoMode } from '../../config/runtime';
 
 export const ProfileBuilder: React.FC = () => {
   const { profile, setProfile, updateProfileConstraint } = useJourneyStore();
@@ -61,9 +62,9 @@ export const ProfileBuilder: React.FC = () => {
           <span>Active Requirements Summary</span>
         </div>
         <p className="text-slate-700 leading-relaxed">
-          Your journey must {profile.requireStepFree ? 'be strictly step-free' : 'allow minor steps'}, 
-          stay within <strong className="font-semibold text-ink">{profile.maxWalkingDistanceMeters} m</strong> of walking, 
-          and cost no more than <strong className="font-semibold text-ink">₹{profile.maxBudgetINR}</strong>.
+          Your journey must {profile.requireStepFree ? 'be strictly step-free' : 'allow routes without a step-free requirement'},
+          {' '}stay within <strong className="font-semibold text-ink">{profile.maxWalkingDistanceMeters} m</strong> of walking
+          {isDemoMode && <>, and cost no more than <strong className="font-semibold text-ink">₹{profile.maxBudgetINR}</strong></>}.
         </p>
       </div>
 
@@ -96,7 +97,7 @@ export const ProfileBuilder: React.FC = () => {
         </label>
 
         {/* Require Wheelchair-Accessible Boarding */}
-        <label className="flex items-center justify-between p-2.5 rounded-lg border border-subtle-border hover:bg-slate-50 cursor-pointer transition-colors">
+        {isDemoMode && <label className="flex items-center justify-between p-2.5 rounded-lg border border-subtle-border hover:bg-slate-50 cursor-pointer transition-colors">
           <span className="text-xs font-medium text-ink">Wheelchair-accessible vehicle boarding</span>
           <input
             type="checkbox"
@@ -104,7 +105,7 @@ export const ProfileBuilder: React.FC = () => {
             onChange={(e) => updateProfileConstraint('requireWheelchairBoarding', e.target.checked)}
             className="w-4 h-4 text-accent rounded border-slate-300 focus:ring-accent"
           />
-        </label>
+        </label>}
 
         {/* Max Walking Distance */}
         <div className="p-2.5 rounded-lg border border-subtle-border space-y-2">
@@ -114,8 +115,9 @@ export const ProfileBuilder: React.FC = () => {
           </div>
           <input
             type="range"
+            aria-label="Maximum walking distance in metres"
             min="100"
-            max="1500"
+            max="3000"
             step="50"
             value={profile.maxWalkingDistanceMeters}
             onChange={(e) => updateProfileConstraint('maxWalkingDistanceMeters', Number(e.target.value))}
@@ -123,13 +125,12 @@ export const ProfileBuilder: React.FC = () => {
           />
           <div className="flex justify-between text-[10px] text-slate-400">
             <span>100 m</span>
-            <span>600 m (standard)</span>
-            <span>1,500 m</span>
+            <span>3,000 m</span>
           </div>
         </div>
 
         {/* Max Fare Budget */}
-        <div className="p-2.5 rounded-lg border border-subtle-border space-y-2">
+        {isDemoMode && <div className="p-2.5 rounded-lg border border-subtle-border space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-medium text-ink">Maximum budget limit</span>
             <span className="font-bold text-accent flex items-center">
@@ -139,6 +140,7 @@ export const ProfileBuilder: React.FC = () => {
           </div>
           <input
             type="range"
+            aria-label="Maximum budget in rupees"
             min="20"
             max="150"
             step="5"
@@ -151,7 +153,7 @@ export const ProfileBuilder: React.FC = () => {
             <span>₹50</span>
             <span>₹150</span>
           </div>
-        </div>
+        </div>}
 
         {/* Strict Verification Toggle */}
         <div className="p-2.5 rounded-lg border border-subtle-border bg-slate-50/70 space-y-1">
