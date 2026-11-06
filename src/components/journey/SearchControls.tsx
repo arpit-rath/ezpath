@@ -157,17 +157,19 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
         <ProfileBuilder />
       </div>
 
-      {/* Primary Submit Action */}
-      <Button
-        type="submit"
-        variant="primary"
-        size="lg"
-        isLoading={isLoading}
-        className="w-full font-semibold shadow-md"
-      >
-        <Search className="w-4 h-4 mr-2" />
-        Find Accessible Routes
-      </Button>
+      {/* Primary Submit Action stays reachable while the form scrolls */}
+      <div className="lg:sticky lg:bottom-0 lg:z-10 lg:-mx-4 lg:-mb-4 lg:border-t lg:border-subtle-border lg:bg-white/95 lg:p-4 lg:backdrop-blur-md">
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          isLoading={isLoading}
+          className="w-full font-semibold shadow-md"
+        >
+          <Search className="w-4 h-4 mr-2" />
+          Find Accessible Routes
+        </Button>
+      </div>
     </form>
   );
 };

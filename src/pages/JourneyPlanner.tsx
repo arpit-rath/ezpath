@@ -68,7 +68,7 @@ export const JourneyPlanner: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full flex-1 lg:h-[calc(100vh-134px)] lg:min-h-[600px] lg:overflow-hidden bg-slate-100">
+    <div className="relative w-full flex-1 lg:min-h-[560px] lg:overflow-hidden bg-slate-100">
       <h1 className="sr-only">Plan a journey</h1>
       {/* 1. FULL-PAGE EDGE-TO-EDGE MAP (Spans whole screen underneath everything) */}
       <div className="relative h-[46vh] w-full lg:absolute lg:inset-0 lg:h-full z-0">
@@ -87,7 +87,7 @@ export const JourneyPlanner: React.FC = () => {
         {leftOpen ? (
           <aside 
             aria-label="Journey Planning Controls"
-            className="pointer-events-auto w-full lg:w-[370px] lg:max-h-[calc(100vh-170px)] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-floating flex flex-col overflow-hidden animate-in fade-in slide-in-from-left-4 duration-200"
+            className="pointer-events-auto w-full lg:w-[370px] lg:max-h-full bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-floating flex flex-col overflow-hidden animate-in fade-in slide-in-from-left-4 duration-200"
           >
             {/* Top Header */}
             <div className="p-3.5 border-b border-subtle-border flex items-center justify-between bg-slate-50/70">
@@ -124,7 +124,7 @@ export const JourneyPlanner: React.FC = () => {
         {rightOpen ? (
           <aside
             aria-label="Route Results and Inspection"
-            className="pointer-events-auto w-full lg:w-[390px] lg:max-h-[calc(100vh-170px)] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-floating flex flex-col overflow-hidden animate-in fade-in slide-in-from-right-4 duration-200"
+            className="pointer-events-auto w-full lg:w-[390px] lg:max-h-full bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-floating flex flex-col overflow-hidden animate-in fade-in slide-in-from-right-4 duration-200"
           >
             {/* Top Header */}
             <div className="p-3.5 border-b border-subtle-border flex items-center justify-between bg-slate-50/70">
@@ -202,7 +202,7 @@ export const JourneyPlanner: React.FC = () => {
 
               {/* Selected Route Actions (Save offline / Detailed navigation) */}
               {selectedRoute && (
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 lg:sticky lg:bottom-0 lg:z-10 lg:shadow-floating">
                   <div className="text-xs font-semibold text-slate-600">
                     Selected Route Actions
                   </div>

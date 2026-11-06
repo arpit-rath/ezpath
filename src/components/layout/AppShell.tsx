@@ -45,7 +45,10 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       <main ref={main} id="main-content" className="flex-1 flex flex-col">
         {children}
       </main>
-      <Footer />
+      {/* The desktop planner fills the screen, so its footer would hide the panels. */}
+      <div className={pathname === '/plan' ? 'lg:hidden' : undefined}>
+        <Footer />
+      </div>
     </div>
   );
 };
