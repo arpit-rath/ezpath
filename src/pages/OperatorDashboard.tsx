@@ -14,13 +14,16 @@ import {
   BarChart2, 
   Plus, 
   X,
-  Server
+  Server,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { authService } from '../services/auth/cognito';
 import { isDemoMode } from '../config/runtime';
 import { DisruptionEvent } from '../types';
+import { CommunityReportQueue } from '../components/reports/CommunityReportQueue';
 
 export const OperatorDashboard: React.FC = () => {
   const {
@@ -37,6 +40,7 @@ export const OperatorDashboard: React.FC = () => {
   } = useOperatorStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [newDisruption, setNewDisruption] = useState({
     entityId: isDemoMode ? 'elev_a1' : '',
     entityName: isDemoMode ? 'Elevator A1 (Platform 1-2 & Concourse)' : '',
@@ -49,10 +53,9 @@ export const OperatorDashboard: React.FC = () => {
   });
 
   const currentUser = authService.getCurrentUser();
-  const operatorName = !isDemoMode && currentUser.isDemoAccount
-    ? 'Operator authentication pending'
-    : currentUser.name;
-  const canWrite = isDemoMode || !currentUser.isDemoAccount;
+  const isAuthenticated = authService.isAuthenticated();
+  const operatorName = !isDemoMode && !isAuthenticated ? 'Operator sign-in required' : currentUser.name;
+  const canWrite = isDemoMode || isAuthenticated;
   const activeDisruptions = disruptions.filter(d => d.isActive);
   const operationalLifts = facilities.filter(f => f.type === 'elevator' && f.operational).length;
   const unavailableLifts = facilities.filter(f => f.type === 'elevator' && !f.operational).length;
@@ -66,6 +69,15 @@ export const OperatorDashboard: React.FC = () => {
       isActive: true,
     });
     setIsModalOpen(false);
+  };
+
+  const handleSignIn = async () => {
+    setAuthError(null);
+    try {
+      await authService.beginSignIn();
+    } catch (reason) {
+      setAuthError(reason instanceof Error ? reason.message : 'Operator sign-in could not start.');
+    }
   };
 
   const metrics = isDemoMode ? [
@@ -92,9 +104,20 @@ export const OperatorDashboard: React.FC = () => {
         <nav className="operator-actions" aria-label="Operator tools">
           <Link to="/operator/network" className="workspace-link"><Server size={15} /> Infrastructure</Link>
           <Link to="/operator/analytics" className="workspace-link"><BarChart2 size={15} /> Analytics</Link>
+          {!isDemoMode && !isAuthenticated && (
+            <Button size="sm" variant="operator" onClick={handleSignIn}>
+              <LogIn size={14} /> Sign in with Cognito
+            </Button>
+          )}
+          {!isDemoMode && isAuthenticated && (
+            <Button size="sm" variant="outline" onClick={() => authService.signOut(true)}>
+              <LogOut size={14} /> Sign out
+            </Button>
+          )}
           {isDemoMode && <Button size="sm" variant="outline" onClick={() => resetDemo()} isLoading={isSimulating}><RotateCcw size={14} /> Reset demo</Button>}
         </nav>
       </div>
+      {authError && <div className="disruption-banner" role="alert">{authError}</div>}
       <div data-reveal className="operator-metrics">
         {metrics.map(metric => <div key={metric.label} className="operator-metric"><span>{metric.label}</span><strong className={metric.alert ? 'text-disruption' : ''}>{metric.value}</strong><small>{metric.detail}</small></div>)}
       </div>
@@ -202,6 +225,8 @@ export const OperatorDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {!isDemoMode && <CommunityReportQueue enabled={isAuthenticated} />}
 
       {/* Manual Report Modal */}
       {isModalOpen && (

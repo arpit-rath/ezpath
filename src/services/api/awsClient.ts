@@ -1,6 +1,7 @@
 import { ApiClient, NetworkEntitiesResult, ReplanResult, RouteSearchResult } from './client';
 import { DisruptionDiff, DisruptionEvent, JourneyRoute, JourneySearchRequest } from '../../types';
 import { CAMPUS_NETWORK_NODES } from '../../data/networkLocations';
+import { authService } from '../auth/cognito';
 import {
   AwsRouteResponse,
   buildAwsRouteRequest,
@@ -44,8 +45,8 @@ export class AwsApiClient implements ApiClient {
       throw new Error('VITE_API_BASE_URL is required when VITE_DEMO_MODE=false.');
     }
     this.baseUrl = configuredBaseUrl.replace(/\/+$/, '');
-    this.fetchImpl = options.fetchImpl ?? fetch;
-    this.getToken = options.getToken ?? (() => localStorage.getItem('accesspath_cognito_token'));
+    this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
+    this.getToken = options.getToken ?? (() => authService.getAccessToken());
     this.requestId = options.requestId ?? defaultRequestId;
   }
 

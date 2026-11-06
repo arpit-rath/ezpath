@@ -28,12 +28,60 @@ export class EzPathRoutingStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    const includeHosting = this.node.tryGetContext("includeHosting") !== "false";
+
+    let hostingApp: amplify.CfnApp | undefined;
+    let hostingBranch: amplify.CfnBranch | undefined;
+    let hostingUrl: string | undefined;
+
+    if (includeHosting) {
+      hostingApp = new amplify.CfnApp(this, "HostingApp", {
+        name: "ezpath-web",
+        platform: "WEB",
+        description: "Manual static hosting for the EzPath web application",
+        customRules: [
+          {
+            source:
+              "</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|json|map|png|svg|txt|webmanifest|woff|woff2)$)([^.]+$)/>",
+            target: "/index.html",
+            status: "200",
+          },
+        ],
+      });
+      hostingBranch = new amplify.CfnBranch(this, "HostingBranch", {
+        appId: hostingApp.attrAppId,
+        branchName: "main",
+        description: "Production branch deployed from a local build artifact",
+        enableAutoBuild: false,
+        enablePullRequestPreview: false,
+        framework: "React",
+        stage: "PRODUCTION",
+      });
+      hostingUrl = `https://${hostingBranch.attrBranchName}.${hostingApp.attrDefaultDomain}`;
+    }
+
     const graphBucket = new s3.Bucket(this, "GraphBucket", {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       versioned: true,
       removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    const reportBucket = new s3.Bucket(this, "ReportBucket", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: RemovalPolicy.RETAIN,
+      cors: [
+        {
+          allowedHeaders: ["content-type"],
+          allowedMethods: [s3.HttpMethods.PUT],
+          allowedOrigins: ["http://localhost:3000", ...(hostingUrl ? [hostingUrl] : [])],
+          maxAge: 300,
+        },
+      ],
+      lifecycleRules: [{ expiration: Duration.days(90) }],
     });
 
     const statusTable = new dynamodb.Table(this, "StatusTable", {
@@ -55,6 +103,21 @@ export class EzPathRoutingStack extends Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
+    const reportsTable = new dynamodb.Table(this, "ReportsTable", {
+      partitionKey: { name: "reportId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      timeToLiveAttribute: "expiresAt",
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+    reportsTable.addGlobalSecondaryIndex({
+      indexName: "reports-by-status",
+      partitionKey: { name: "statusKey", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "submittedAt", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     const operatorUserPool = new cognito.UserPool(this, "OperatorUserPool", {
       userPoolName: "ezpath-operators",
       selfSignUpEnabled: false,
@@ -64,49 +127,50 @@ export class EzPathRoutingStack extends Stack {
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
       removalPolicy: RemovalPolicy.RETAIN,
     });
+    const operatorDomain = operatorUserPool.addDomain("OperatorDomain", {
+      cognitoDomain: {
+        domainPrefix: `ezpath-operators-${this.account}`,
+      },
+    });
     const operatorClient = operatorUserPool.addClient("OperatorWebClient", {
       authFlows: { userSrp: true },
       generateSecret: false,
       preventUserExistenceErrors: true,
+      oAuth: {
+        flows: { authorizationCodeGrant: true },
+        scopes: [
+          cognito.OAuthScope.OPENID,
+          cognito.OAuthScope.EMAIL,
+          cognito.OAuthScope.PROFILE,
+        ],
+        callbackUrls: [
+          "http://localhost:3000/operator/callback",
+          ...(hostingUrl ? [`${hostingUrl}/operator/callback`] : []),
+        ],
+        logoutUrls: [
+          "http://localhost:3000/operator",
+          ...(hostingUrl ? [`${hostingUrl}/operator`] : []),
+        ],
+      },
     });
-
-    const hostingApp = new amplify.CfnApp(this, "HostingApp", {
-      name: "ezpath-web",
-      platform: "WEB",
-      description: "Manual static hosting for the EzPath web application",
-      customRules: [
-        {
-          source:
-            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|json|map|png|svg|txt|webmanifest|woff|woff2)$)([^.]+$)/>",
-          target: "/index.html",
-          status: "200",
-        },
-      ],
-    });
-    const hostingBranch = new amplify.CfnBranch(this, "HostingBranch", {
-      appId: hostingApp.attrAppId,
-      branchName: "main",
-      description: "Production branch deployed from a local build artifact",
-      enableAutoBuild: false,
-      enablePullRequestPreview: false,
-      framework: "React",
-      stage: "PRODUCTION",
-    });
-    const hostingUrl = `https://${hostingBranch.attrBranchName}.${hostingApp.attrDefaultDomain}`;
 
     const campusMap = new location.CfnMap(this, "CampusMap", {
-      mapName: "EzPathCampusMap",
+      mapName: "EzPathSrmCampusMap",
       description: "Basemap for the SRM Kattankulathur journey planner",
-      configuration: { style: "VectorOpenDataStandardLight" },
+      configuration: { style: "VectorEsriNavigation" },
     });
     const campusMapKey = new location.CfnAPIKey(this, "CampusMapKey", {
       keyName: "EzPathCampusBrowserMapKey",
       description: "Referer-restricted browser key for rendering the EzPath campus map",
+      forceUpdate: true,
       noExpiry: true,
       restrictions: {
         allowActions: ["geo:GetMap*"],
         allowResources: [campusMap.attrArn],
-        allowReferers: ["http://localhost:3000/*", `${hostingUrl}/*`],
+        allowReferers: [
+          "http://localhost:3000/*",
+          ...(hostingUrl ? [`${hostingUrl}/*`] : []),
+        ],
       },
     });
 
@@ -187,6 +251,28 @@ export class EzPathRoutingStack extends Stack {
     });
     statusTable.grantReadWriteData(disruptionFunction);
 
+    const reportPackage = path.join(repositoryRoot, ".build", "report_lambda");
+    const reportFunction = new lambda.Function(this, "ReportFunction", {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: "handler.lambda_handler",
+      code: lambda.Code.fromAsset(reportPackage),
+      architecture: lambda.Architecture.X86_64,
+      description: "Community accessibility report intake and operator review",
+      environment: {
+        EZPATH_REPORTS_TABLE: reportsTable.tableName,
+        EZPATH_REPORTS_BUCKET: reportBucket.bucketName,
+      },
+      memorySize: 256,
+      timeout: Duration.seconds(15),
+      logGroup: new logs.LogGroup(this, "ReportFunctionLogs", {
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
+    });
+    reportsTable.grantReadWriteData(reportFunction);
+    reportBucket.grantRead(reportFunction);
+    reportBucket.grantPut(reportFunction);
+
     const publisherPackage = path.join(repositoryRoot, ".build", "event_publisher_lambda");
     const publisherFunction = new lambda.Function(this, "EventPublisherFunction", {
       runtime: lambda.Runtime.PYTHON_3_12,
@@ -232,7 +318,7 @@ export class EzPathRoutingStack extends Stack {
           apigatewayv2.CorsHttpMethod.POST,
           apigatewayv2.CorsHttpMethod.OPTIONS,
         ],
-        allowOrigins: ["http://localhost:3000", hostingUrl],
+        allowOrigins: ["http://localhost:3000", ...(hostingUrl ? [hostingUrl] : [])],
         maxAge: Duration.hours(1),
       },
     });
@@ -241,6 +327,7 @@ export class EzPathRoutingStack extends Stack {
       "DisruptionIntegration",
       disruptionFunction,
     );
+    const reportIntegration = new HttpLambdaIntegration("ReportIntegration", reportFunction);
     const operatorAuthorizer = new HttpJwtAuthorizer(
       "OperatorAuthorizer",
       `https://cognito-idp.${this.region}.amazonaws.com/${operatorUserPool.userPoolId}`,
@@ -252,6 +339,30 @@ export class EzPathRoutingStack extends Stack {
       methods: [apigatewayv2.HttpMethod.GET],
       integration: routeIntegration,
     });
+    httpApi.addRoutes({
+      path: "/v1/reports/upload-request",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: reportIntegration,
+    });
+    httpApi.addRoutes({
+      path: "/v1/reports",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: reportIntegration,
+    });
+    httpApi.addRoutes({
+      path: "/v1/reports",
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: reportIntegration,
+      authorizer: operatorAuthorizer,
+    });
+    for (const action of ["verify", "reject"]) {
+      httpApi.addRoutes({
+        path: `/v1/reports/{reportId}/${action}`,
+        methods: [apigatewayv2.HttpMethod.POST],
+        integration: reportIntegration,
+        authorizer: operatorAuthorizer,
+      });
+    }
     httpApi.addRoutes({
       path: "/v1/routes",
       methods: [apigatewayv2.HttpMethod.POST],
@@ -298,20 +409,29 @@ export class EzPathRoutingStack extends Stack {
         title: "Event publisher invocations and errors",
         left: [publisherFunction.metricInvocations(), publisherFunction.metricErrors()],
       }),
+      new cloudwatch.GraphWidget({
+        title: "Community report Lambda invocations and errors",
+        left: [reportFunction.metricInvocations(), reportFunction.metricErrors()],
+      }),
     );
 
     new CfnOutput(this, "ApiUrl", { value: httpApi.apiEndpoint });
     new CfnOutput(this, "AwsRegion", { value: this.region });
-    new CfnOutput(this, "AmplifyAppId", { value: hostingApp.attrAppId });
-    new CfnOutput(this, "AmplifyBranchName", { value: hostingBranch.attrBranchName });
-    new CfnOutput(this, "AmplifyUrl", { value: hostingUrl });
+    if (hostingApp && hostingBranch && hostingUrl) {
+      new CfnOutput(this, "AmplifyAppId", { value: hostingApp.attrAppId });
+      new CfnOutput(this, "AmplifyBranchName", { value: hostingBranch.attrBranchName });
+      new CfnOutput(this, "AmplifyUrl", { value: hostingUrl });
+    }
     new CfnOutput(this, "LocationMapName", { value: campusMap.mapName });
     new CfnOutput(this, "LocationApiKeyName", { value: campusMapKey.keyName });
     new CfnOutput(this, "GraphBucketName", { value: graphBucket.bucketName });
     new CfnOutput(this, "GraphObjectKey", { value: "graphs/campus.graphml" });
     new CfnOutput(this, "StatusTableName", { value: statusTable.tableName });
+    new CfnOutput(this, "ReportsTableName", { value: reportsTable.tableName });
+    new CfnOutput(this, "ReportBucketName", { value: reportBucket.bucketName });
     new CfnOutput(this, "OperatorUserPoolId", { value: operatorUserPool.userPoolId });
     new CfnOutput(this, "OperatorUserPoolClientId", { value: operatorClient.userPoolClientId });
+    new CfnOutput(this, "OperatorUserPoolDomain", { value: operatorDomain.baseUrl() });
     new CfnOutput(this, "AppSyncEventsHttpUrl", {
       value: `https://${eventsApi.httpDns}/event`,
     });

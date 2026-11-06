@@ -1,35 +1,12 @@
-import type { StyleSpecification } from 'maplibre-gl';
-import { isDemoMode } from '../../config/runtime';
-
-export const OSM_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {
-    'osm-tiles': {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    },
-  },
-  layers: [
-    {
-      id: 'osm-tiles-layer',
-      type: 'raster',
-      source: 'osm-tiles',
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  ],
-};
-
 export interface MapConfig {
-  style: StyleSpecification | string;
-  provider: 'amazon-location' | 'openstreetmap';
+  style: string | null;
+  provider: 'amazon-location';
+  configurationError: string | null;
   defaultCenter: [number, number];
   defaultZoom: number;
   minZoom: number;
   maxZoom: number;
+  maxBounds: [[number, number], [number, number]];
 }
 
 export interface LocationMapOptions {
@@ -43,13 +20,11 @@ export class LocationMapAdapter {
   private readonly mapName?: string;
   private readonly region?: string;
   private readonly apiKey?: string;
-  private readonly demoMode: boolean;
 
   constructor(options: LocationMapOptions = {}) {
     this.mapName = options.mapName ?? import.meta.env.VITE_LOCATION_MAP_NAME;
     this.region = options.region ?? import.meta.env.VITE_AWS_REGION;
     this.apiKey = options.apiKey ?? import.meta.env.VITE_LOCATION_API_KEY;
-    this.demoMode = options.demoMode ?? isDemoMode;
   }
 
   getMapConfig(): MapConfig {
@@ -58,15 +33,22 @@ export class LocationMapAdapter {
       ? `https://maps.geo.${this.region}.amazonaws.com/maps/v0/maps/${encodeURIComponent(
           this.mapName!,
         )}/style-descriptor?key=${encodeURIComponent(this.apiKey!)}`
-      : OSM_STYLE;
+      : null;
 
     return {
       style,
-      provider: hasAwsConfig ? 'amazon-location' : 'openstreetmap',
-      defaultCenter: this.demoMode ? [77.23, 28.635] : [80.0450412, 12.8234361],
-      defaultZoom: this.demoMode ? 13.5 : 15.5,
-      minZoom: 10,
+      provider: 'amazon-location',
+      configurationError: hasAwsConfig
+        ? null
+        : 'Amazon Location is not configured for this build. Add the map name, AWS Region, and browser API key.',
+      defaultCenter: [80.0450412, 12.8234361],
+      defaultZoom: 15.5,
+      minZoom: 14,
       maxZoom: 19,
+      maxBounds: [
+        [80.0305, 12.8085],
+        [80.0595, 12.8375],
+      ],
     };
   }
 

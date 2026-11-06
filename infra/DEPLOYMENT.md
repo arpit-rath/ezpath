@@ -40,6 +40,16 @@ npx cdk deploy EzPathRoutingStack --outputs-file cdk-outputs.json
 Set-Location ..
 ```
 
+If a new-account Amplify app quota increase is still pending, deploy the AWS core first:
+
+```powershell
+npx cdk deploy EzPathRoutingStack `
+  --context includeHosting=false `
+  --outputs-file cdk-outputs.json
+```
+
+After AWS approves the quota, run the normal deploy command without that context flag. CDK then adds Amplify Hosting and updates API Gateway CORS and the Amazon Location key referers to include its generated URL.
+
 `infra/cdk-outputs.json` contains deployment-specific identifiers and the browser AppSync subscriber key. Keep it local and do not commit it.
 
 ## 3. Upload the generated routing graph

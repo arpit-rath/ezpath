@@ -4,17 +4,12 @@ import { JourneyRoute, FacilityStatus, NetworkNode } from '../../types';
 import { MapLegend } from './MapLegend';
 import { useOperatorStore } from '../../stores/operatorStore';
 import { 
-  Navigation, 
-  MapPin, 
-  ExternalLink, 
   CheckCircle2, 
   XCircle, 
   X,
-  Compass,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { MapLibreCanvas } from './MapLibreCanvas';
-import { locationMapAdapter } from '../../services/maps/locationAdapter';
 
 interface InteractiveMapProps {
   routes?: JourneyRoute[];
@@ -35,13 +30,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const selectedRoute = useMemo(() => {
     return routes.find(r => r.id === selectedRouteId) || routes[0];
   }, [routes, selectedRouteId]);
-  const mapProvider = locationMapAdapter.getMapConfig().provider;
-  const providerLabel = mapProvider === 'amazon-location' ? 'Amazon Location' : 'OpenStreetMap';
+  const providerLabel = 'Amazon Location';
 
   return (
     <div 
       className={`relative w-full h-full min-h-[500px] overflow-hidden bg-slate-100 flex flex-col ${className}`}
-      aria-label="Transit and Accessible Route Map"
+      aria-label="SRM campus accessible walking map"
     >
       {/* 1. MapLibre street map - Amazon Location in configured production builds */}
       {mapMode === 'street' ? (
@@ -92,20 +86,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 hidden md:flex items-center gap-2 pointer-events-auto">
         <div className="bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-200 shadow-floating flex items-center gap-2 text-xs font-medium text-ink">
           <div className="w-5 h-5 rounded-md bg-emerald-700 text-white flex items-center justify-center font-bold text-[9px]">
-            {mapProvider === 'amazon-location' ? 'AWS' : 'OSM'}
+            AWS
           </div>
           <span className="font-bold text-ink">{providerLabel}</span>
           <span className="text-slate-300">|</span>
           <span className="text-[11px] text-slate-500">{ACTIVE_MAP_CONFIG.subtitle}</span>
-          <span className="text-slate-300">|</span>
-          <a
-            href={ACTIVE_MAP_CONFIG.fullMapUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent hover:text-accent-hover inline-flex items-center gap-0.5 text-[11px] font-semibold"
-          >
-            Full Map <ExternalLink className="w-3 h-3" />
-          </a>
         </div>
 
         {/* Map View Mode Switcher */}

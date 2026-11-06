@@ -165,7 +165,7 @@ To connect the application to the deployed AWS routing backend:
    VITE_DEMO_MODE=false
    VITE_API_BASE_URL=https://your-http-api-id.execute-api.ap-south-1.amazonaws.com
    VITE_AWS_REGION=ap-south-1
-   VITE_LOCATION_MAP_NAME=EzPathCampusMap
+   VITE_LOCATION_MAP_NAME=EzPathSrmCampusMap
    VITE_LOCATION_API_KEY=your_referer_restricted_browser_key
    VITE_COGNITO_USER_POOL_ID=ap-south-1_replace_me
    VITE_COGNITO_CLIENT_ID=your_cognito_app_client_id

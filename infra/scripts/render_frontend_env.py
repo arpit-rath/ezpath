@@ -14,6 +14,7 @@ OUTPUT_TO_ENV = {
     "LocationMapName": "VITE_LOCATION_MAP_NAME",
     "OperatorUserPoolId": "VITE_COGNITO_USER_POOL_ID",
     "OperatorUserPoolClientId": "VITE_COGNITO_CLIENT_ID",
+    "OperatorUserPoolDomain": "VITE_COGNITO_DOMAIN",
     "AppSyncEventsHttpUrl": "VITE_APPSYNC_EVENTS_HTTP_URL",
     "AppSyncEventsRealtimeUrl": "VITE_APPSYNC_EVENTS_REALTIME_URL",
     "AppSyncEventsSubscriberKey": "VITE_APPSYNC_EVENTS_API_KEY",

@@ -229,3 +229,25 @@ export interface DisruptionDiff {
   disruptionReason: string;
 }
 
+export type CommunityReportStatus =
+  | 'AWAITING_UPLOAD'
+  | 'PENDING_REVIEW'
+  | 'VERIFIED'
+  | 'REJECTED';
+
+export interface CommunityReport {
+  reportId: string;
+  status: CommunityReportStatus;
+  description: string;
+  locationId: string;
+  locationName: string;
+  latitude: number;
+  longitude: number;
+  photoUrl: string;
+  contentType: string;
+  createdAt: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+

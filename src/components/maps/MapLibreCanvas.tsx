@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl, { GeoJSONSource, Map as MapLibreMap, Marker } from 'maplibre-gl';
 import { ACTIVE_NETWORK_NODES } from '../../data/networkLocations';
 import { locationMapAdapter } from '../../services/maps/locationAdapter';
@@ -30,11 +30,12 @@ export const MapLibreCanvas: React.FC<MapLibreCanvasProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const config = useMemo(() => locationMapAdapter.getMapConfig(), []);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !config.style) return;
 
-    const config = locationMapAdapter.getMapConfig();
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: config.style,
@@ -42,9 +43,11 @@ export const MapLibreCanvas: React.FC<MapLibreCanvasProps> = ({
       zoom: config.defaultZoom,
       minZoom: config.minZoom,
       maxZoom: config.maxZoom,
+      maxBounds: config.maxBounds,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+    map.on('error', () => setMapError('The Amazon Location campus map could not be loaded. Check the map key and network connection.'));
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
 
     map.on('load', () => {
@@ -93,7 +96,7 @@ export const MapLibreCanvas: React.FC<MapLibreCanvasProps> = ({
       map.remove();
       mapRef.current = null;
     };
-  }, [onSelectEntity]);
+  }, [config.maxBounds, config.maxZoom, config.minZoom, config.style, onSelectEntity]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -108,5 +111,14 @@ export const MapLibreCanvas: React.FC<MapLibreCanvasProps> = ({
     }
   }, [selectedRoute]);
 
-  return <div ref={containerRef} className="absolute inset-0 h-full w-full" />;
+  const error = config.configurationError ?? mapError;
+  return <>
+    <div ref={containerRef} className="absolute inset-0 h-full w-full" />
+    {error && <div role="alert" className="absolute inset-0 z-10 grid place-items-center bg-slate-100 p-8 text-center">
+      <div className="max-w-md rounded-xl border border-amber-300 bg-white p-5 text-sm text-slate-700 shadow-sm">
+        <strong className="mb-2 block text-slate-900">Amazon Location map unavailable</strong>
+        {error}
+      </div>
+    </div>}
+  </>;
 };

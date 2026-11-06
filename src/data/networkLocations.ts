@@ -82,14 +82,10 @@ export const ACTIVE_NETWORK_NODES = isDemoMode ? DEMO_NODES : CAMPUS_NETWORK_NOD
 
 export const ACTIVE_MAP_CONFIG = isDemoMode
   ? {
-      embedUrl: 'https://www.openstreetmap.org/export/embed.html?bbox=77.2000%2C28.6180%2C77.2600%2C28.6550&layer=mapnik&marker=28.6328%2C77.2185',
-      fullMapUrl: 'https://www.openstreetmap.org/#map=14/28.6350/77.2300',
       schematicViewBox: '77.20 28.61 0.06 0.04',
       subtitle: 'Demo multimodal corridor',
     }
   : {
-      embedUrl: 'https://www.openstreetmap.org/export/embed.html?bbox=80.0330%2C12.8118%2C80.0570%2C12.8351&layer=mapnik&marker=12.8234361%2C80.0450412',
-      fullMapUrl: 'https://www.openstreetmap.org/#map=16/12.8234361/80.0450412',
       schematicViewBox: '80.032 12.810 0.027 0.027',
       subtitle: 'SRM walking network',
     };

@@ -143,4 +143,23 @@ describe('AWS route contract adapter', () => {
 
     await expect(client.searchRoutes(searchRequest())).rejects.toThrow('SNAP_DISTANCE_EXCEEDED');
   });
+
+  it('calls the default browser fetch without binding it to the client', async () => {
+    const browserFetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async function (this: unknown) {
+      // Browsers reject fetch when it is called as a method of another object.
+      if (this !== undefined && this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return new Response(JSON.stringify({ status: 'ok', graph_version: 'osm-test-v1' }), { status: 200 });
+    } as typeof fetch);
+
+    try {
+      const client = new AwsApiClient({ baseUrl: 'https://api.example.test', getToken: () => null });
+
+      await expect(client.getHealth()).resolves.toMatchObject({ status: 'ok', mode: 'aws' });
+      expect(browserFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      browserFetch.mockRestore();
+    }
+  });
 });
