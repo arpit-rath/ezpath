@@ -32,6 +32,8 @@ export const MapLibreCanvas: React.FC<MapLibreCanvasProps> = ({
   const markersRef = useRef<Marker[]>([]);
   const [mapError, setMapError] = useState<string | null>(null);
   const config = useMemo(() => locationMapAdapter.getMapConfig(), []);
+  const routeRef = useRef(selectedRoute);
+  routeRef.current = selectedRoute;
 
   useEffect(() => {
     if (!containerRef.current || !config.style) return;
@@ -47,13 +49,18 @@ export const MapLibreCanvas: React.FC<MapLibreCanvasProps> = ({
       attributionControl: { compact: true },
     });
     mapRef.current = map;
-    map.on('error', () => setMapError('The Amazon Location campus map could not be loaded. Check the map key and network connection.'));
+    let mapLoaded = false;
+    map.on('error', () => {
+      // A single failed tile after loading must not hide a working map.
+      if (!mapLoaded) setMapError('The Amazon Location map could not be loaded. Check the map key and network connection.');
+    });
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
 
     map.on('load', () => {
+      mapLoaded = true;
       map.addSource(ROUTE_SOURCE_ID, {
         type: 'geojson',
-        data: routeFeature(selectedRoute),
+        data: routeFeature(routeRef.current),
       });
       map.addLayer({
         id: ROUTE_LAYER_ID,
@@ -70,8 +77,9 @@ export const MapLibreCanvas: React.FC<MapLibreCanvasProps> = ({
         },
       });
 
-      if (selectedRoute?.geometry.length) {
-        const bounds = locationMapAdapter.calculateBounds(selectedRoute.geometry);
+      const latestRoute = routeRef.current;
+      if (latestRoute?.geometry.length) {
+        const bounds = locationMapAdapter.calculateBounds(latestRoute.geometry);
         if (bounds) map.fitBounds(bounds, { padding: 72, maxZoom: 17, duration: 0 });
       }
     });
@@ -100,10 +108,10 @@ export const MapLibreCanvas: React.FC<MapLibreCanvasProps> = ({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-
-    const source = map.getSource(ROUTE_SOURCE_ID) as GeoJSONSource | undefined;
-    source?.setData(routeFeature(selectedRoute));
+    // The source exists only after load; the load handler draws the latest route.
+    const source = map?.getSource(ROUTE_SOURCE_ID) as GeoJSONSource | undefined;
+    if (!map || !source) return;
+    source.setData(routeFeature(selectedRoute));
 
     if (selectedRoute?.geometry.length) {
       const bounds = locationMapAdapter.calculateBounds(selectedRoute.geometry);

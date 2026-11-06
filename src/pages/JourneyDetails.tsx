@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { fareLabel } from '../utils/fare';
 
 export const JourneyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -159,10 +160,10 @@ export const JourneyDetails: React.FC = () => {
               <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> Fare
             </div>
             <div className="font-heading font-extrabold text-xl text-ink">
-              ₹{route.totalFareINR}
+              {fareLabel(route.totalFareINR, route.fareStatus)}
             </div>
             <div className="text-[10px] text-ink-muted">
-              {route.accessibilityStatus ? 'Walking route only' : 'Integrated tariff'}
+              {route.fareStatus === 'partial' ? 'Bus and suburban fares are not published' : route.transportModes.length === 1 && route.accessibilityStatus ? 'Walking route' : route.accessibilityStatus ? 'Published metro fare' : 'Integrated tariff'}
             </div>
           </div>
 
@@ -174,7 +175,7 @@ export const JourneyDetails: React.FC = () => {
               {route.walkingDistanceMeters} m
             </div>
             <div className="text-[10px] text-ink-muted">
-              {route.accessibilityStatus ? 'Mapped graph distance' : 'Max slope < 1:14'}
+              {route.accessibilityStatus ? 'Total walking on this journey' : 'Max slope < 1:14'}
             </div>
           </div>
 
@@ -186,11 +187,20 @@ export const JourneyDetails: React.FC = () => {
               {route.transfersCount}
             </div>
             <div className="text-[10px] text-ink-muted">
-              {route.accessibilityStatus ? 'Walking network' : 'Level platform changes'}
+              {route.accessibilityStatus ? 'Changes between vehicles' : 'Level platform changes'}
             </div>
           </div>
         </div>
       </div>
+
+      {route.dataNotes && route.dataNotes.length > 0 && (
+        <section className="journey-panel space-y-2" aria-label="About this journey's data">
+          <h2 className="font-heading font-bold text-sm text-ink">About this information</h2>
+          <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-slate-600">
+            {route.dataNotes.map(note => <li key={note}>{note}</li>)}
+          </ul>
+        </section>
+      )}
 
       {/* Turn-by-Turn Text Itinerary */}
       <div className="journey-panel space-y-6">

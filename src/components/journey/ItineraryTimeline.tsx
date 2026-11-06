@@ -72,6 +72,10 @@ export const ItineraryTimeline: React.FC<ItineraryTimelineProps> = ({ legs }) =>
                     <span className="text-[10px] font-semibold text-accessible shrink-0 flex items-center gap-0.5">
                       <CheckCircle2 className="w-3 h-3" /> Step-free
                     </span>
+                  ) : step.accessUnknown ? (
+                    <span className="text-[10px] font-semibold text-warning shrink-0 flex items-center gap-0.5">
+                      <AlertTriangle className="w-3 h-3" /> Access unverified
+                    </span>
                   ) : (
                     <span className="text-[10px] font-semibold text-disruption shrink-0 flex items-center gap-0.5">
                       <AlertTriangle className="w-3 h-3" /> Stairs

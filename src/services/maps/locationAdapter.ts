@@ -41,13 +41,13 @@ export class LocationMapAdapter {
       configurationError: hasAwsConfig
         ? null
         : 'Amazon Location is not configured for this build. Add the map name, AWS Region, and browser API key.',
-      defaultCenter: [80.0450412, 12.8234361],
-      defaultZoom: 15.5,
-      minZoom: 14,
+      defaultCenter: [80.14, 12.95],
+      defaultZoom: 10,
+      minZoom: 8.5,
       maxZoom: 19,
       maxBounds: [
-        [80.0305, 12.8085],
-        [80.0595, 12.8375],
+        [79.5, 12.3],
+        [80.7, 13.7],
       ],
     };
   }

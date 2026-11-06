@@ -15,8 +15,8 @@ describe('LocationMapAdapter', () => {
     expect(adapter.getMapConfig()).toMatchObject({
       style: null,
       provider: 'amazon-location',
-      defaultCenter: [80.0450412, 12.8234361],
-      minZoom: 14,
+      defaultCenter: [80.14, 12.95],
+      minZoom: 8.5,
     });
     expect(adapter.getMapConfig().configurationError).toContain('Amazon Location');
   });

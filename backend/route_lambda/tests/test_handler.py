@@ -136,3 +136,44 @@ def test_status_failure_returns_503_instead_of_potentially_stale_route():
 
     assert response["statusCode"] == 503
     assert json.loads(response["body"])["error"]["code"] == "STATUS_OVERLAY_UNAVAILABLE"
+
+
+class _FakePlanner:
+    def __init__(self) -> None:
+        self.blocked = None
+
+    def plan(self, payload, *, blocked_entity_ids=(), status_overlay=None):
+        self.blocked = blocked_entity_ids
+        return {"status": "ok", "journeys": [], "request_id": payload.get("request_id")}
+
+
+def _journey_event(payload) -> dict:
+    return {**_event(payload), "routeKey": "POST /v1/journeys"}
+
+
+def test_journey_route_uses_the_planner():
+    planner = _FakePlanner()
+
+    response = handle_event(_journey_event({"request_id": "journey-1"}), _service(), None, planner)
+
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"])["request_id"] == "journey-1"
+
+
+def test_journey_route_reports_missing_transit_data():
+    response = handle_event(_journey_event({}), _service(), None, None)
+
+    assert response["statusCode"] == 503
+    assert json.loads(response["body"])["error"]["code"] == "TRANSIT_DATA_UNAVAILABLE"
+
+
+def test_journey_route_passes_live_blocks_to_the_planner():
+    class Status:
+        def get_snapshot(self):
+            return StatusSnapshot(("event-1",), ("event-1",), frozenset({"node:1"}))
+
+    planner = _FakePlanner()
+
+    handle_event(_journey_event({}), _service(), Status(), planner)
+
+    assert planner.blocked == frozenset({"node:1"})

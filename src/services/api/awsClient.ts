@@ -7,6 +7,12 @@ import {
   buildAwsRouteRequest,
   mapAwsRouteResponse,
 } from './awsContract';
+import {
+  AwsJourneyResponse,
+  buildAwsJourneyRequest,
+  isCampusPair,
+  mapAwsJourneyResponse,
+} from './awsJourneyContract';
 
 type FetchLike = typeof fetch;
 
@@ -80,6 +86,9 @@ export class AwsApiClient implements ApiClient {
   }
 
   async searchRoutes(request: JourneySearchRequest): Promise<RouteSearchResult> {
+    if (!isCampusPair(request.originId, request.destinationId)) {
+      return this.searchJourneys(request);
+    }
     const canonicalRequest = buildAwsRouteRequest(request, this.requestId());
     const response = await this.requestJson<AwsRouteResponse>('/v1/routes', {
       method: 'POST',
@@ -95,6 +104,17 @@ export class AwsApiClient implements ApiClient {
       graphVersion: response.graph.version,
       message: response.message,
     };
+  }
+
+  private async searchJourneys(request: JourneySearchRequest): Promise<RouteSearchResult> {
+    const response = await this.requestJson<AwsJourneyResponse>('/v1/journeys', {
+      method: 'POST',
+      body: JSON.stringify(buildAwsJourneyRequest(request, this.requestId())),
+    });
+    const searchTimestamp = new Date().toISOString();
+    const routes = mapAwsJourneyResponse(response, request, searchTimestamp);
+    for (const route of routes) this.knownRoutes.set(route.id, route);
+    return { routes, searchTimestamp, graphVersion: this.graphVersion, message: response.message };
   }
 
   async replanRoute(routeId: string, request: JourneySearchRequest): Promise<ReplanResult> {

@@ -43,6 +43,7 @@ export interface RouteStep {
   distanceMeters: number;
   durationMinutes: number;
   stepFree: boolean;
+  accessUnknown?: boolean; // step-free status is not recorded in the source data
   elevationChangeMeters?: number;
   facilityId?: string;
   facilityName?: string;
@@ -66,7 +67,7 @@ export interface RouteLeg {
   wheelchairAccessible: boolean;
   elevatorId?: string;
   elevatorOperational?: boolean;
-  evidenceSource: 'operator_iot' | 'station_audit' | 'municipal_survey' | 'crowdsourced' | 'openstreetmap' | 'unknown';
+  evidenceSource: 'operator_iot' | 'station_audit' | 'municipal_survey' | 'crowdsourced' | 'openstreetmap' | 'published_timetable' | 'unknown';
   evidenceTimestamp: string;
   confidenceScore: number | null; // null when confidence has not been measured
   geometry: [number, number][]; // [longitude, latitude]
@@ -101,6 +102,7 @@ export interface JourneyRoute {
   totalDistanceMeters: number;
   walkingDistanceMeters: number;
   totalFareINR: number;
+  fareStatus?: 'complete' | 'partial';
   transfersCount: number;
   transportModes: TransportMode[];
   legs: RouteLeg[];
@@ -112,6 +114,7 @@ export interface JourneyRoute {
   reliabilityScore: number | null; // null when verification coverage is not measured
   evidenceConfidence: 'high' | 'medium' | 'low';
   explanation: RouteExplanation;
+  dataNotes?: string[];
   geometry: [number, number][]; // Full route line
   departureTime: string;
   arrivalTime: string;
@@ -206,6 +209,7 @@ export interface SavedJourney {
   arrivalTime: string;
   totalDurationMinutes: number;
   totalFareINR: number;
+  fareStatus?: 'complete' | 'partial';
   walkingDistanceMeters: number;
   transfersCount: number;
   transportModes: TransportMode[];

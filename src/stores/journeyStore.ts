@@ -157,8 +157,9 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
   clearDisruptionDiff: () => set({ lastDisruptionDiff: null }),
 
   searchJourneys: async () => {
-    const { originId, destinationId, profile, departureTime } = get();
-    set({ isLoading: true, error: null });
+    const { originId, destinationId, profile } = get();
+    const departureTime = isDemoMode ? get().departureTime : new Date().toISOString();
+    set({ isLoading: true, error: null, departureTime });
 
     try {
       const client = getApiClient();

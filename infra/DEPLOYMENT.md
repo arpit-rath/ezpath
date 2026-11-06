@@ -64,6 +64,18 @@ Set-Location ../..
 
 The uploader verifies the manifest and SHA-256 before uploading the graph and manifest to the versioned bucket.
 
+Then build the Chennai timetable artifact and upload it to the same bucket. The API returns HTTP 503 for `POST /v1/journeys` until this object exists:
+
+```powershell
+Set-Location traversal/routing
+$env:PYTHONPATH = "src"
+python scripts/build_transit.py
+aws s3 cp data/chennai-transit.json.gz "s3://<GraphBucketName>/transit/chennai-transit.json.gz"
+Set-Location ../..
+```
+
+Rerun this step whenever a feed under `data/` changes. Running Lambda environments keep the copy they loaded, so redeploy the function after replacing it.
+
 ## 4. Generate the production frontend environment
 
 CloudFormation returns the Amazon Location key name, not its browser key value. Retrieve that value with the authenticated profile, then render the ignored `.env.production` file:

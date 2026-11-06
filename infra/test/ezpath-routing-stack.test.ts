@@ -57,6 +57,7 @@ test("creates the ZIP-based Python Lambda and both HTTP routes", () => {
   });
   rendered.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: "GET /health" });
   rendered.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: "POST /v1/routes" });
+  rendered.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: "POST /v1/journeys" });
   assert.ok(rendered.toJSON());
 });
 

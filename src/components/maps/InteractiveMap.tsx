@@ -35,7 +35,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   return (
     <div 
       className={`relative w-full h-full min-h-[500px] overflow-hidden bg-slate-100 flex flex-col ${className}`}
-      aria-label="SRM campus accessible walking map"
+      aria-label="Chennai and SRM campus journey map"
     >
       {/* 1. MapLibre street map - Amazon Location in configured production builds */}
       {mapMode === 'street' ? (

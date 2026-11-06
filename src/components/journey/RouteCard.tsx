@@ -2,7 +2,6 @@ import React from 'react';
 import { JourneyRoute } from '../../types';
 import { 
   Clock, 
-  IndianRupee, 
   Footprints, 
   ArrowRight, 
   CheckCircle2, 
@@ -16,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { fareLabel } from '../../utils/fare';
 
 interface RouteCardProps {
   route: JourneyRoute;
@@ -89,9 +89,8 @@ export const RouteCard: React.FC<RouteCardProps> = ({
           <span className="text-xs font-medium text-ink-muted">min</span>
         </div>
 
-        <div className="flex items-center gap-1 font-heading font-bold text-lg text-ink">
-          <IndianRupee className="w-4 h-4 text-ink-muted" />
-          <span>{route.totalFareINR}</span>
+        <div className="flex items-center gap-1 font-heading font-bold text-base text-right text-ink">
+          <span>{fareLabel(route.totalFareINR, route.fareStatus)}</span>
         </div>
       </div>
 

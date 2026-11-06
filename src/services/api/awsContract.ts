@@ -141,6 +141,7 @@ function edgeLeg(
       distanceMeters: Number(edge.distance_m.toFixed(1)),
       durationMinutes: Math.max(0.01, Number(edge.duration_min.toFixed(2))),
       stepFree: verified,
+      accessUnknown: unknown,
       hazardWarning: unknown ? 'Wheelchair accessibility is unverified in OpenStreetMap.' : undefined,
     }],
   };

@@ -1,4 +1,5 @@
 import campusCatalogJson from '../../traversal/routing/config/campus-locations.json';
+import chennaiCatalogJson from '../../traversal/routing/config/chennai-locations.json';
 import { isDemoMode } from '../config/runtime';
 import { NetworkNode } from '../types';
 import { DEMO_NODES } from './demoNetwork';
@@ -40,14 +41,34 @@ const DEMO_LOCATIONS: JourneyLocation[] = DEMO_NODES.map((node) => ({
   longitude: node.coordinates[0],
 }));
 
-export const ACTIVE_LOCATIONS = isDemoMode ? DEMO_LOCATIONS : CAMPUS_LOCATIONS;
-export const DEFAULT_ORIGIN_ID = isDemoMode ? 'node_central_station' : 'srm-library';
-export const DEFAULT_DESTINATION_ID = isDemoMode
-  ? 'node_riverside_campus'
-  : 'srm-medical-college-hospital';
+const CHENNAI_LOCATIONS = (chennaiCatalogJson as { locations: JourneyLocation[] }).locations;
+
+export interface LocationGroup {
+  label: string;
+  locations: JourneyLocation[];
+}
+
+const byCategory = (category: string) => CHENNAI_LOCATIONS.filter((location) => location.category === category);
+
+export const LOCATION_GROUPS: LocationGroup[] = isDemoMode
+  ? [{ label: 'Demo network', locations: DEMO_LOCATIONS }]
+  : [
+      { label: 'SRM Kattankulathur campus', locations: CAMPUS_LOCATIONS },
+      { label: 'Chennai Metro stations', locations: byCategory('metro_station') },
+      { label: 'Suburban railway stations', locations: byCategory('suburban_station') },
+      { label: 'MTC bus termini', locations: byCategory('bus_terminus') },
+    ];
+
+export const ACTIVE_LOCATIONS = LOCATION_GROUPS.flatMap((group) => group.locations);
+export const DEFAULT_ORIGIN_ID = isDemoMode ? 'node_central_station' : 'rail-chennai-central-suburban';
+export const DEFAULT_DESTINATION_ID = isDemoMode ? 'node_riverside_campus' : 'srm-library';
 
 export function getJourneyLocation(id: string): JourneyLocation | undefined {
   return ACTIVE_LOCATIONS.find((location) => location.id === id);
+}
+
+export function getCatalogLocation(id: string): JourneyLocation | undefined {
+  return [...CAMPUS_LOCATIONS, ...CHENNAI_LOCATIONS].find((location) => location.id === id);
 }
 
 export function getCampusLocation(id: string): JourneyLocation | undefined {
@@ -87,7 +108,7 @@ export const ACTIVE_MAP_CONFIG = isDemoMode
     }
   : {
       schematicViewBox: '80.032 12.810 0.027 0.027',
-      subtitle: 'SRM walking network',
+      subtitle: 'Chennai and SRM campus',
     };
 
 export const CAMPUS_GRAPH_ID = campusCatalog.graph_id;

@@ -218,6 +218,8 @@ export class EzPathRoutingStack extends Stack {
         EZPATH_GRAPH_BUCKET: graphBucket.bucketName,
         EZPATH_GRAPH_KEY: "graphs/campus.graphml",
         EZPATH_GRAPH_PATH: "/tmp/ezpath/campus.graphml",
+        EZPATH_TRANSIT_KEY: "transit/chennai-transit.json.gz",
+        EZPATH_TRANSIT_PATH: "/tmp/ezpath/chennai-transit.json.gz",
         EZPATH_STATUS_TABLE: statusTable.tableName,
       },
       ephemeralStorageSize: Size.mebibytes(1024),
@@ -369,6 +371,11 @@ export class EzPathRoutingStack extends Stack {
       integration: routeIntegration,
     });
     httpApi.addRoutes({
+      path: "/v1/journeys",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: routeIntegration,
+    });
+    httpApi.addRoutes({
       path: "/v1/events/active",
       methods: [apigatewayv2.HttpMethod.GET],
       integration: disruptionIntegration,
@@ -426,6 +433,7 @@ export class EzPathRoutingStack extends Stack {
     new CfnOutput(this, "LocationApiKeyName", { value: campusMapKey.keyName });
     new CfnOutput(this, "GraphBucketName", { value: graphBucket.bucketName });
     new CfnOutput(this, "GraphObjectKey", { value: "graphs/campus.graphml" });
+    new CfnOutput(this, "TransitObjectKey", { value: "transit/chennai-transit.json.gz" });
     new CfnOutput(this, "StatusTableName", { value: statusTable.tableName });
     new CfnOutput(this, "ReportsTableName", { value: reportsTable.tableName });
     new CfnOutput(this, "ReportBucketName", { value: reportBucket.bucketName });

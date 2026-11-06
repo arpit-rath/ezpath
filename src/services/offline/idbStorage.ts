@@ -39,6 +39,7 @@ export async function saveJourney(route: JourneyRoute, originName: string, desti
     arrivalTime: route.arrivalTime,
     totalDurationMinutes: route.totalDurationMinutes,
     totalFareINR: route.totalFareINR,
+    fareStatus: route.fareStatus,
     walkingDistanceMeters: route.walkingDistanceMeters,
     transfersCount: route.transfersCount,
     transportModes: route.transportModes,

@@ -179,7 +179,7 @@ To connect the application to the deployed AWS routing backend:
    npm run build
    ```
 
-Production mode uses the source-backed SRM campus catalog and calls `POST /v1/routes`. The current backend is pedestrian-only: the production UI does not offer bus or metro routing until timetable-aware routing is implemented. Operator writes require a valid Cognito access token; demo scenario controls remain available only when `VITE_DEMO_MODE=true`.
+Production mode plans journeys across Chennai with published metro, suburban rail and MTC bus timetables through `POST /v1/journeys`, and uses `POST /v1/routes` for trips inside the SRM campus. Times are timetabled rather than live. Metro fares come from the CMRL fare table; the bus and suburban feeds publish no fares, so those totals are shown as incomplete. The feeds publish no wheelchair-boarding data, so transit journeys are always marked unverified. Operator writes require a valid Cognito access token; demo scenario controls remain available only when `VITE_DEMO_MODE=true`.
 
 The CDK stack creates manual Amplify Hosting, API Gateway CORS for the generated Amplify URL, and an Amazon Location map key restricted to map rendering from localhost and that hosted URL. It does not connect Amplify to GitHub. Follow [infra/DEPLOYMENT.md](infra/DEPLOYMENT.md) after IAM access is configured; no deployment has been performed from this repository yet.
 
