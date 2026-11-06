@@ -41,6 +41,7 @@ class DynamoTypedTable:
                 description=values[":description"],
                 locationId=values[":locationId"],
                 locationName=values[":locationName"],
+                issueType=values[":issueType"],
                 latitude=values[":latitude"],
                 longitude=values[":longitude"],
             )
@@ -124,6 +125,7 @@ def test_public_upload_and_submission_flow():
             "routeKey": "POST /v1/reports",
             "body": json.dumps({
                 "reportId": report_id,
+                "issueType": "lift_outage",
                 "description": "Lift is not responding near the entrance.",
                 "locationId": "srm-library",
             }),
@@ -195,6 +197,7 @@ def test_real_repository_handles_dynamodb_number_types_through_review():
             "routeKey": "POST /v1/reports",
             "body": json.dumps({
                 "reportId": report_id,
+                "issueType": "lift_outage",
                 "description": "Lift is not responding near the entrance.",
                 "locationId": "srm-library",
             }),
@@ -226,14 +229,48 @@ def test_real_repository_handles_dynamodb_number_types_through_review():
     assert response_body(reviewed)["latitude"] == 12.8232845
 
 
+def test_traveller_can_report_an_outage_without_a_photo():
+    table = DynamoTypedTable()
+    repository = DynamoReportRepository("reports", DynamoResource(table))
+    s3 = FakeS3()
+
+    submitted = handle_event(
+        {
+            "routeKey": "POST /v1/reports",
+            "body": json.dumps({
+                "issueType": "path_blocked",
+                "description": "The ramp at the east exit is blocked by barricades.",
+                "locationId": "rail-potheri",
+            }),
+        },
+        repository,
+        s3,
+        "private-bucket",
+    )
+    assert submitted["statusCode"] == 201
+
+    listed = response_body(handle_event({"routeKey": "GET /v1/reports"}, repository, s3, "private-bucket"))
+    assert listed[0]["issueType"] == "path_blocked"
+    assert listed[0]["locationName"] == "Potheri"
+    assert listed[0]["photoUrl"] is None
+
+
+def test_rejects_unknown_issue_types_and_locations():
+    repository = DynamoReportRepository("reports", DynamoResource(DynamoTypedTable()))
+    for payload in (
+        {"issueType": "aliens", "description": "Something unusual", "locationId": "srm-library"},
+        {"issueType": "other", "description": "Something unusual", "locationId": "nowhere"},
+    ):
+        response = handle_event({"routeKey": "POST /v1/reports", "body": json.dumps(payload)}, repository, FakeS3(), "b")
+        assert response["statusCode"] == 400
+
+
 def test_handler_finds_locations_in_the_lambda_package_layout(tmp_path):
     source = REPOSITORY_ROOT / "backend" / "report_lambda"
     shutil.copy2(source / "handler.py", tmp_path / "handler.py")
     shutil.copy2(source / "repository.py", tmp_path / "repository.py")
-    shutil.copy2(
-        REPOSITORY_ROOT / "traversal" / "routing" / "config" / "campus-locations.json",
-        tmp_path / "campus-locations.json",
-    )
+    for name in ("campus-locations.json", "chennai-locations.json"):
+        shutil.copy2(REPOSITORY_ROOT / "traversal" / "routing" / "config" / name, tmp_path / name)
 
     result = subprocess.run(
         [sys.executable, "-B", "-c", "import handler; print(handler._campus_locations()['srm-library']['name'])"],

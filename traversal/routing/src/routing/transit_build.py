@@ -15,6 +15,7 @@ from typing import Any, Iterable
 import zipfile
 
 from .graph import haversine_m
+from .shapes import BusShapeMatcher, RailNetwork, simplify, stop_offsets
 
 
 ARTIFACT_VERSION = 1
@@ -61,6 +62,8 @@ class FeedSource:
     mode: str
     path: Path
     ignore_calendar: bool = False
+    # Road or track geometry used when a feed has no shapes of its own.
+    shape_paths: tuple[Path, ...] = ()
 
 
 def seconds(value: str) -> int:
@@ -97,6 +100,10 @@ class ArtifactBuilder:
         self.pattern_trips: dict[tuple[int, tuple[int, ...]], list[tuple[int, list[int]]]] = defaultdict(list)
         self.fares: dict[str, float] = {}
         self.sources: list[dict[str, Any]] = []
+        self.feed_shapes: dict[str, list[list[float]]] = {}
+        self.pattern_shape_ids: dict[tuple[int, tuple[int, ...]], str] = {}
+        self.bus_shape_paths: list[Path] = []
+        self.rail_shape_path: Path | None = None
 
     def add_stop(self, key: str, name: str, lat: float, lon: float, mode: str, zone: str = "") -> int:
         index = self.stop_index.get(key)
@@ -140,10 +147,26 @@ class ArtifactBuilder:
 
         masks = service_masks(feed)
         trips: dict[str, tuple[int, int]] = {}
+        trip_shapes: dict[str, str] = {}
         for row in feed.rows("trips.txt"):
             mask = ALL_DAYS if source.ignore_calendar else masks.get(row["service_id"], 0)
             if mask and row["route_id"] in routes:
                 trips[row["trip_id"]] = (routes[row["route_id"]], mask)
+                if (row.get("shape_id") or "").strip():
+                    trip_shapes[row["trip_id"]] = f"{source.id}:{row['shape_id'].strip()}"
+
+        points: dict[str, list[tuple[int, list[float]]]] = defaultdict(list)
+        for row in feed.rows("shapes.txt"):
+            points[f"{source.id}:{row['shape_id']}"].append((
+                int(row["shape_pt_sequence"]),
+                [float(row["shape_pt_lon"]), float(row["shape_pt_lat"])],
+            ))
+        for shape_id, vertices in points.items():
+            self.feed_shapes[shape_id] = simplify([vertex for _, vertex in sorted(vertices, key=lambda item: item[0])])
+        if source.mode == "bus":
+            self.bus_shape_paths.extend(source.shape_paths)
+        if source.mode == "rail" and source.shape_paths:
+            self.rail_shape_path = source.shape_paths[0]
 
         current_trip: str | None = None
         events: list[tuple[int, int, int]] = []
@@ -170,7 +193,10 @@ class ArtifactBuilder:
                 stops.append(stop)
                 times.append(departure)
             if len(stops) >= 2:
-                self.pattern_trips[(route, tuple(stops))].append((mask, times))
+                key = (route, tuple(stops))
+                self.pattern_trips[key].append((mask, times))
+                if current_trip in trip_shapes:
+                    self.pattern_shape_ids[key] = trip_shapes[current_trip]
 
         by_trip: dict[str, list[tuple[int, int, int]]] = defaultdict(list)
         for row in feed.rows("stop_times.txt"):
@@ -245,16 +271,57 @@ class ArtifactBuilder:
             result[index] = [[other, round(distance, 1)] for distance, other in nearby[:MAX_FOOTPATHS_PER_STOP]]
         return result
 
+    def _assign_shapes(self) -> tuple[list[list[list[float]]], dict[tuple[int, tuple[int, ...]], tuple[int, list[int]]], dict[str, int]]:
+        shapes: list[list[list[float]]] = []
+        known: dict[str, int] = {}
+        assigned: dict[tuple[int, tuple[int, ...]], tuple[int, list[int]]] = {}
+        counts = {"metro": 0, "rail": 0, "bus": 0}
+        matcher = BusShapeMatcher(self.bus_shape_paths) if self.bus_shape_paths else None
+        rail = RailNetwork(self.rail_shape_path) if self.rail_shape_path else None
+
+        def remember(key: str, shape: list[list[float]]) -> int:
+            if key not in known:
+                known[key] = len(shapes)
+                shapes.append(shape)
+            return known[key]
+
+        for pattern_key in self.pattern_trips:
+            route, stops = pattern_key
+            mode = self.routes[route][2]
+            points = [[round(self.stops[stop]["lon"], 5), round(self.stops[stop]["lat"], 5)] for stop in stops]
+            shape_id = self.pattern_shape_ids.get(pattern_key)
+            if shape_id in self.feed_shapes:
+                offsets, _ = stop_offsets(self.feed_shapes[shape_id], points)
+                assigned[pattern_key] = (remember(shape_id, self.feed_shapes[shape_id]), offsets)
+                counts[mode] += 1
+            elif mode == "rail" and rail is not None:
+                shape, offsets = rail.pattern_shape(points)
+                assigned[pattern_key] = (remember(f"rail:{stops}", shape), offsets)
+                counts[mode] += 1
+            elif mode == "bus" and matcher is not None:
+                match = matcher.match(points)
+                if match is not None:
+                    line, reverse, offsets = match
+                    shape = matcher.lines[line][::-1] if reverse else matcher.lines[line]
+                    assigned[pattern_key] = (remember(f"bus:{line}:{reverse}", shape), offsets)
+                    counts[mode] += 1
+        return shapes, assigned, counts
+
     def artifact(self) -> dict[str, Any]:
         flagged = self.mark_unreliable_stops()
+        shapes, assigned, shape_counts = self._assign_shapes()
         patterns = []
-        for (route, stops), trips in self.pattern_trips.items():
+        for key, trips in self.pattern_trips.items():
+            route, stops = key
             trips.sort(key=lambda trip: trip[1][0])
+            shape, offsets = assigned.get(key, (None, None))
             patterns.append({
                 "route": route,
                 "stops": list(stops),
                 "masks": [mask for mask, _ in trips],
                 "times": [[times[position] for _, times in trips] for position in range(len(stops))],
+                "shape": shape,
+                "offsets": offsets,
             })
         return {
             "schema_version": ARTIFACT_VERSION,
@@ -265,6 +332,8 @@ class ArtifactBuilder:
                       for stop in self.stops],
             "routes": self.routes,
             "patterns": patterns,
+            "shapes": shapes,
+            "shape_coverage": shape_counts,
             "footpaths": self.footpaths(),
             "fares": self.fares,
             "unreliable_stops": flagged,

@@ -13,6 +13,7 @@ import {
   aws_cloudwatch as cloudwatch,
   aws_cognito as cognito,
   aws_dynamodb as dynamodb,
+  aws_iam as iam,
   aws_lambda as lambda,
   aws_logs as logs,
   aws_location as location,
@@ -159,6 +160,16 @@ export class EzPathRoutingStack extends Stack {
       description: "Basemap for the SRM Kattankulathur journey planner",
       configuration: { style: "VectorEsriNavigation" },
     });
+    const satelliteMap = new location.CfnMap(this, "SatelliteMap", {
+      mapName: "EzPathSrmSatelliteMap",
+      description: "Satellite imagery for the Chennai and SRM journey planner",
+      configuration: { style: "RasterEsriImagery" },
+    });
+    const walkingCalculator = new location.CfnRouteCalculator(this, "WalkingCalculator", {
+      calculatorName: "EzPathWalkingRoutes",
+      dataSource: "Esri",
+      description: "Street walking paths between stops outside the campus graph",
+    });
     const campusMapKey = new location.CfnAPIKey(this, "CampusMapKey", {
       keyName: "EzPathCampusBrowserMapKey",
       description: "Referer-restricted browser key for rendering the EzPath campus map",
@@ -166,7 +177,7 @@ export class EzPathRoutingStack extends Stack {
       noExpiry: true,
       restrictions: {
         allowActions: ["geo:GetMap*"],
-        allowResources: [campusMap.attrArn],
+        allowResources: [campusMap.attrArn, satelliteMap.attrArn],
         allowReferers: [
           "http://localhost:3000/*",
           ...(hostingUrl ? [`${hostingUrl}/*`] : []),
@@ -220,6 +231,7 @@ export class EzPathRoutingStack extends Stack {
         EZPATH_GRAPH_PATH: "/tmp/ezpath/campus.graphml",
         EZPATH_TRANSIT_KEY: "transit/chennai-transit.json.gz",
         EZPATH_TRANSIT_PATH: "/tmp/ezpath/chennai-transit.json.gz",
+        EZPATH_ROUTE_CALCULATOR: walkingCalculator.calculatorName,
         EZPATH_STATUS_TABLE: statusTable.tableName,
       },
       ephemeralStorageSize: Size.mebibytes(1024),
@@ -233,6 +245,10 @@ export class EzPathRoutingStack extends Stack {
 
     graphBucket.grantRead(routeFunction);
     statusTable.grantReadData(routeFunction);
+    routeFunction.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["geo:CalculateRoute"],
+      resources: [walkingCalculator.attrArn],
+    }));
 
     const disruptionPackage = path.join(repositoryRoot, ".build", "disruption_lambda");
     const disruptionFunction = new lambda.Function(this, "DisruptionFunction", {
@@ -324,6 +340,8 @@ export class EzPathRoutingStack extends Stack {
         maxAge: Duration.hours(1),
       },
     });
+    const defaultStage = httpApi.defaultStage?.node.defaultChild as apigatewayv2.CfnStage;
+    defaultStage.defaultRouteSettings = { throttlingRateLimit: 20, throttlingBurstLimit: 40 };
     const routeIntegration = new HttpLambdaIntegration("RouteIntegration", routeFunction);
     const disruptionIntegration = new HttpLambdaIntegration(
       "DisruptionIntegration",
@@ -430,6 +448,7 @@ export class EzPathRoutingStack extends Stack {
       new CfnOutput(this, "AmplifyUrl", { value: hostingUrl });
     }
     new CfnOutput(this, "LocationMapName", { value: campusMap.mapName });
+    new CfnOutput(this, "LocationSatelliteMapName", { value: satelliteMap.mapName });
     new CfnOutput(this, "LocationApiKeyName", { value: campusMapKey.keyName });
     new CfnOutput(this, "GraphBucketName", { value: graphBucket.bucketName });
     new CfnOutput(this, "GraphObjectKey", { value: "graphs/campus.graphml" });

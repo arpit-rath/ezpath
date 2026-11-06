@@ -70,6 +70,11 @@ export async function deleteSavedJourney(id: string): Promise<void> {
   await db.delete('saved_journeys', id);
 }
 
+export async function getSavedJourneyByRouteId(routeId: string): Promise<SavedJourney | undefined> {
+  const journeys = await getAllSavedJourneys();
+  return journeys.reverse().find((journey) => journey.routeId === routeId);
+}
+
 export function isOffline(): boolean {
   return typeof navigator !== 'undefined' ? !navigator.onLine : false;
 }

@@ -80,11 +80,13 @@ export const RouteCard: React.FC<RouteCardProps> = ({
         </span>
       </div>
 
+      <p className="mb-2 text-xs font-semibold text-ink">{route.label}</p>
+
       {/* Main duration and fare */}
       <div className="flex items-baseline justify-between mb-3">
         <div className="flex items-baseline gap-2">
           <span className="font-heading font-extrabold text-2xl text-ink">
-            {route.totalDurationMinutes}
+            {Math.round(route.totalDurationMinutes)}
           </span>
           <span className="text-xs font-medium text-ink-muted">min</span>
         </div>
@@ -98,7 +100,7 @@ export const RouteCard: React.FC<RouteCardProps> = ({
       <div className="grid grid-cols-2 gap-2 py-2.5 px-3 bg-slate-50/80 rounded-lg text-xs mb-3 border border-slate-100">
         <div className="flex items-center gap-1.5 text-ink-secondary">
           <Footprints className="w-3.5 h-3.5 text-accent" />
-          <span>Walk: <strong>{route.walkingDistanceMeters} m</strong></span>
+          <span>Walk: <strong>{Math.round(route.walkingDistanceMeters)} m</strong></span>
         </div>
         <div className="flex items-center gap-1.5 text-ink-secondary">
           <span className="font-bold text-slate-400">⇌</span>

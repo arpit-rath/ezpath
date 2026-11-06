@@ -21,6 +21,7 @@ describe('ReportsClient', () => {
     const result = await client.submit(photo, {
       description: 'The library lift is not responding.',
       locationId: 'srm-library',
+      issueType: 'lift_outage',
     });
 
     expect(result.status).toBe('PENDING_REVIEW');

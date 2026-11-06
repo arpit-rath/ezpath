@@ -36,7 +36,7 @@ export const DisruptionBanner: React.FC = () => {
               Your journey has been affected.
             </h3>
             <p className="text-xs text-slate-700 leading-relaxed max-w-xl">
-              <strong>{activeDisruptionAlert.entityName}</strong> at {activeDisruptionAlert.stationName || 'station'} is currently unavailable ({activeDisruptionAlert.reason}).
+              <strong>{activeDisruptionAlert.entityName}</strong>{activeDisruptionAlert.stationName && activeDisruptionAlert.stationName !== activeDisruptionAlert.entityName ? ` at ${activeDisruptionAlert.stationName}` : ''} is reported as affected ({activeDisruptionAlert.reason}).
             </p>
           </div>
         </div>

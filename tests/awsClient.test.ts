@@ -6,7 +6,8 @@ import {
   buildAwsRouteRequest,
   mapAwsRouteResponse,
 } from '../src/services/api/awsContract';
-import { JourneySearchRequest } from '../src/types';
+import { JourneyRoute, JourneySearchRequest } from '../src/types';
+import { routePassesNear } from '../src/utils/geo';
 import {
   AwsJourneyResponse,
   buildAwsJourneyRequest,
@@ -261,5 +262,14 @@ describe('Chennai journeys', () => {
     request.profile = { ...request.profile, allowedModes: ['walking'] };
 
     expect(() => buildAwsJourneyRequest(request, 'request-123')).toThrow('at least one transit mode');
+  });
+});
+
+describe('routePassesNear', () => {
+  const route = { legs: [{ geometry: [[80.0, 13.0], [80.01, 13.0]] }], geometry: [] } as unknown as JourneyRoute;
+
+  it('matches a disruption on the route and ignores one far away', () => {
+    expect(routePassesNear(route, 13.0005, 80.01)).toBe(true);
+    expect(routePassesNear(route, 13.05, 80.01)).toBe(false);
   });
 });

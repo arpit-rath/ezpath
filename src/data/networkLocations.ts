@@ -103,11 +103,9 @@ export const ACTIVE_NETWORK_NODES = isDemoMode ? DEMO_NODES : CAMPUS_NETWORK_NOD
 
 export const ACTIVE_MAP_CONFIG = isDemoMode
   ? {
-      schematicViewBox: '77.20 28.61 0.06 0.04',
       subtitle: 'Demo multimodal corridor',
     }
   : {
-      schematicViewBox: '80.032 12.810 0.027 0.027',
       subtitle: 'Chennai and SRM campus',
     };
 

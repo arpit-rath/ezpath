@@ -40,13 +40,14 @@ def operator_report(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "reportId": item["reportId"],
         "status": item["status"],
+        "issueType": item.get("issueType", "other"),
         "description": item.get("description", ""),
         "locationId": item.get("locationId", ""),
         "locationName": item.get("locationName", ""),
         "latitude": _response_coordinate(item.get("latitude")),
         "longitude": _response_coordinate(item.get("longitude")),
-        "photoKey": item["photoKey"],
-        "contentType": item["contentType"],
+        "photoKey": item.get("photoKey"),
+        "contentType": item.get("contentType"),
         "createdAt": item["createdAt"],
         "submittedAt": item.get("submittedAt"),
         "reviewedAt": item.get("reviewedAt"),
@@ -77,6 +78,23 @@ class DynamoReportRepository:
         self._table.put_item(Item=item, ConditionExpression="attribute_not_exists(reportId)")
         return item
 
+    def create_report(self, report_id: str, details: dict[str, Any]) -> dict[str, Any]:
+        """Store a report that has no photo."""
+        now = _now()
+        item = {
+            **details,
+            "reportId": report_id,
+            "status": PENDING_STATUS,
+            "statusKey": PENDING_STATUS,
+            "latitude": _stored_coordinate(details["latitude"]),
+            "longitude": _stored_coordinate(details["longitude"]),
+            "createdAt": _iso(now),
+            "submittedAt": _iso(now),
+            "expiresAt": int((now + timedelta(days=REPORT_RETENTION_DAYS)).timestamp()),
+        }
+        self._table.put_item(Item=item, ConditionExpression="attribute_not_exists(reportId)")
+        return item
+
     def submit(self, report_id: str, details: dict[str, Any]) -> dict[str, Any] | None:
         now = _now()
         try:
@@ -84,7 +102,7 @@ class DynamoReportRepository:
                 Key={"reportId": report_id},
                 UpdateExpression=(
                     "SET #status = :pending, statusKey = :pending, submittedAt = :now, "
-                    "description = :description, locationId = :locationId, locationName = :locationName, "
+                    "issueType = :issueType, description = :description, locationId = :locationId, locationName = :locationName, "
                     "latitude = :latitude, longitude = :longitude"
                 ),
                 ConditionExpression="attribute_exists(reportId) AND #status = :awaiting",
@@ -93,6 +111,7 @@ class DynamoReportRepository:
                     ":pending": PENDING_STATUS,
                     ":awaiting": "AWAITING_UPLOAD",
                     ":now": _iso(now),
+                    ":issueType": details["issueType"],
                     ":description": details["description"],
                     ":locationId": details["locationId"],
                     ":locationName": details["locationName"],

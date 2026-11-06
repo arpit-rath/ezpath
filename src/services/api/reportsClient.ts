@@ -1,4 +1,4 @@
-import { CommunityReport } from '../../types';
+import { CommunityReport, ReportIssueType } from '../../types';
 import { authService } from '../auth/cognito';
 
 type FetchLike = typeof fetch;
@@ -18,6 +18,7 @@ export interface ReportSubmission {
 export interface ReportDetails {
   description: string;
   locationId: string;
+  issueType: ReportIssueType;
 }
 
 export class ReportsClient {
@@ -48,7 +49,10 @@ export class ReportsClient {
     return payload as T;
   }
 
-  async submit(photo: Blob, details: ReportDetails): Promise<ReportSubmission> {
+  async submit(photo: Blob | null, details: ReportDetails): Promise<ReportSubmission> {
+    if (!photo) {
+      return this.json<ReportSubmission>('/v1/reports', { method: 'POST', body: JSON.stringify(details) });
+    }
     const upload = await this.json<UploadRequest>('/v1/reports/upload-request', {
       method: 'POST',
       body: JSON.stringify({ contentType: photo.type, sizeBytes: photo.size }),

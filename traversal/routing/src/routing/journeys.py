@@ -1,6 +1,7 @@
 """Door-to-door journeys across Chennai transit and the SRM walking graph."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -11,19 +12,26 @@ from typing import Any
 import networkx as nx
 
 from .accessibility import evaluate_edge
-from .graph import haversine_m, snap_coordinate
+from .catalog import BLOCK_RADIUS_M, blocked_locations, expand_blocked
+from .graph import haversine_m
 from .router import route_candidates
 from .service import RouteRequestError, _integer, _number
-from .status import edge_is_blocked, node_is_blocked, normalize_blocked_entities
+from .status import edge_is_blocked, node_is_blocked
+from .street_paths import StreetWalker
 from .transit import Ride, TransitNetwork
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
 MODES = ("bus", "metro", "rail")
-MODE_SETS = (("bus", "metro", "rail"), ("metro", "rail"), ("bus", "metro"), ("bus",))
+MODE_SETS = (
+    ("bus", "metro", "rail"), ("metro", "rail"), ("bus", "metro"), ("bus", "rail"),
+    ("bus",), ("metro",), ("rail",),
+)
+MODE_NAMES = {"bus": "Bus", "metro": "Metro", "rail": "Suburban rail"}
 WALK_DETOUR = 1.3
 MAX_ACCESS_WALK_M = 1500.0
-CAMPUS_SNAP_M = 100.0
+CAMPUS_SNAP_M = 250.0
+MIN_STREET_PATH_M = 40.0
 
 
 @dataclass(frozen=True)
@@ -75,18 +83,23 @@ def _departure(value: Any) -> datetime:
 class CampusWalker:
     """Measure walking inside the SRM graph instead of estimating it."""
 
-    def __init__(self, graph: nx.MultiDiGraph, wheelchair: bool, blocked: frozenset[str], speed_mps: float) -> None:
+    def __init__(self, graph: nx.MultiDiGraph, connected: list[Any], wheelchair: bool,
+                 blocked: frozenset[str], speed_mps: float) -> None:
         self.graph = graph
+        self.connected = connected
         self.wheelchair = wheelchair
         self.blocked = blocked
         self.speed_mps = speed_mps
 
     def locate(self, lat: float, lon: float) -> tuple[Any, float] | None:
-        try:
-            snapped = snap_coordinate(self.graph, lat, lon, CAMPUS_SNAP_M)
-        except ValueError:
-            return None
-        return snapped["node_id"], float(snapped["distance_m"])
+        """Snap to the main path network; small fragments do not reach anywhere."""
+        best, best_distance = None, CAMPUS_SNAP_M
+        for node in self.connected:
+            data = self.graph.nodes[node]
+            distance = haversine_m(lat, lon, float(data["y"]), float(data["x"]))
+            if distance <= best_distance:
+                best, best_distance = node, distance
+        return None if best is None else (best, round(best_distance, 2))
 
     def distances(self, node: Any, *, towards: bool) -> dict[Any, float]:
         graph = self.graph.reverse(copy=False) if towards else self.graph
@@ -116,10 +129,15 @@ class CampusWalker:
 
 class JourneyPlanner:
     def __init__(self, network: TransitNetwork, campus_graph: nx.MultiDiGraph | None = None,
-                 graph_version: str | None = None) -> None:
+                 graph_version: str | None = None, street_walker: StreetWalker | None = None) -> None:
         self.network = network
         self.campus_graph = campus_graph
         self.graph_version = graph_version
+        self.street_walker = street_walker
+        self.connected_nodes = (
+            list(max(nx.strongly_connected_components(campus_graph), key=len))
+            if campus_graph is not None else []
+        )
 
     def plan(self, payload: Any, *, blocked_entity_ids: Any = (), status_overlay: dict | None = None) -> dict[str, Any]:
         if not isinstance(payload, dict):
@@ -156,12 +174,16 @@ class JourneyPlanner:
                 "journey can be verified. Turn off strict verification to see unverified options."
             )}
 
-        blocked = normalize_blocked_entities(blocked_entity_ids)
-        walker = CampusWalker(self.campus_graph, wheelchair, blocked, speed) if self.campus_graph is not None else None
+        blocked = expand_blocked(blocked_entity_ids, self.campus_graph)
+        blocked_stops = self._blocked_stops(blocked)
+        walker = (
+            CampusWalker(self.campus_graph, self.connected_nodes, wheelchair, blocked, speed)
+            if self.campus_graph is not None else None
+        )
         seconds_now = departure.hour * 3600 + departure.minute * 60 + departure.second
         day_bit = 1 << departure.weekday()
-        access = self._links(origin, walker, max_walk, towards=False)
-        egress = self._links(destination, walker, max_walk, towards=True)
+        access = self._links(origin, walker, max_walk, blocked_stops, towards=False)
+        egress = self._links(destination, walker, max_walk, blocked_stops, towards=True)
 
         journeys: dict[str, dict[str, Any]] = {}
         direct = self._direct(origin, destination, walker, seconds_now, speed, max_walk, wheelchair)
@@ -176,6 +198,7 @@ class JourneyPlanner:
                     continue
                 for itinerary in self.network.search(
                     access_seconds, egress_seconds, seconds_now, day_bit, allowed, speed,
+                    blocked_stops=blocked_stops,
                 ):
                     journey = self._journey(
                         itinerary, origin, destination, access, egress, walker, speed, wheelchair,
@@ -183,27 +206,97 @@ class JourneyPlanner:
                     if journey["metrics"]["walking_distance_m"] <= max_walk:
                         journeys.setdefault(journey["journey_id"], journey)
 
-        ordered = sorted(journeys.values(), key=lambda item: (
-            item["metrics"]["arrival_s"], item["metrics"]["transfers"],
-        ))[:max_routes]
+        ordered = self._select(list(journeys.values()), max_routes)
         for journey in ordered:
             journey["metrics"].pop("arrival_s")
+        self._add_street_paths(ordered, speed)
         return {
             **base,
             "status": "ok" if ordered else "no_route",
             "journeys": ordered,
-            "message": None if ordered else (
-                "No journey fits this departure time and walking limit. Try a later time or a higher walking limit."
-            ),
+            "message": None if ordered else self._no_route_message(modes, access, egress, destination, blocked),
         }
 
-    def _links(self, point: Point, walker: CampusWalker | None, max_walk: float, *, towards: bool) -> dict[int, WalkLink]:
+    @staticmethod
+    def _select(journeys: list[dict[str, Any]], max_routes: int) -> list[dict[str, Any]]:
+        """Show the fastest journey for each mode mix before filling with others."""
+        ranked = sorted(journeys, key=lambda item: (item["metrics"]["arrival_s"], item["metrics"]["transfers"]))
+        chosen: list[dict[str, Any]] = []
+        seen: set[tuple[str, ...]] = set()
+        for journey in ranked:
+            mix = tuple(journey["modes"])
+            if mix not in seen and len(chosen) < max_routes:
+                seen.add(mix)
+                chosen.append(journey)
+        for journey in ranked:
+            if journey not in chosen and len(chosen) < max_routes:
+                chosen.append(journey)
+        return sorted(chosen, key=lambda item: item["metrics"]["arrival_s"])
+
+    def _no_route_message(self, modes: list[str], access: dict[int, WalkLink], egress: dict[int, WalkLink],
+                          destination: Point, blocked: frozenset[str]) -> str:
+        names = " or ".join(MODE_NAMES[mode] for mode in modes)
+        disrupted = blocked_locations(blocked)
+        if disrupted:
+            places = ", ".join(place["name"] for place in disrupted)
+            return f"A reported disruption at {places} leaves no usable journey. Try another destination or a later time."
+        reach_start = any(self.network.stops[stop].mode in modes for stop in access)
+        reach_end = any(self.network.stops[stop].mode in modes for stop in egress)
+        if not reach_start:
+            return f"{names} has no stop within your walking limit of the starting point. Try another mode or raise the limit."
+        if not reach_end:
+            return f"{names} has no stop within your walking limit of {destination.name}. Try another mode or raise the limit."
+        return f"No {names} journey is available at this time. Try a later time or another mode."
+
+    def _blocked_stops(self, blocked: frozenset[str]) -> frozenset[int]:
+        stops: set[int] = set()
+        for place in blocked_locations(blocked):
+            stops.update(stop for stop, _ in self.network.nearby_stops(
+                place["latitude"], place["longitude"], BLOCK_RADIUS_M, limit=50,
+            ))
+        return frozenset(stops)
+
+    def _add_street_paths(self, journeys: list[dict[str, Any]], speed: float) -> None:
+        """Replace estimated walks with real street paths, keeping estimates on failure."""
+        if self.street_walker is None:
+            return
+        legs = [
+            leg for journey in journeys for leg in journey["legs"]
+            if leg.get("walk_source") == "estimated" and leg["distance_m"] >= MIN_STREET_PATH_M
+        ]
+        if not legs:
+            return
+
+        def request(leg: dict[str, Any]) -> tuple[float, list[list[float]]] | None:
+            start, end = leg["from"], leg["to"]
+            return self.street_walker.path((start["latitude"], start["longitude"]), (end["latitude"], end["longitude"]))
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            paths = list(pool.map(request, legs))
+        for leg, path in zip(legs, paths):
+            if path is None:
+                continue
+            distance, geometry = path
+            leg.update(
+                distance_m=round(distance, 1), duration_min=round(distance / speed / 60, 1),
+                geometry=geometry, walk_source="street_path",
+            )
+        for journey in journeys:
+            walks = [leg for leg in journey["legs"] if leg["mode"] == "walk"]
+            journey["metrics"]["walking_distance_m"] = round(sum(leg["distance_m"] for leg in walks), 1)
+            if not any(leg.get("walk_source") == "estimated" for leg in walks):
+                journey["notes"] = [note for note in journey["notes"] if not note.startswith("Walking outside")]
+
+    def _links(self, point: Point, walker: CampusWalker | None, max_walk: float,
+               blocked_stops: frozenset[int], *, towards: bool) -> dict[int, WalkLink]:
         radius = min(max_walk / WALK_DETOUR, MAX_ACCESS_WALK_M)
         nearby = self.network.nearby_stops(point.lat, point.lon, radius)
         located = walker.locate(point.lat, point.lon) if walker else None
         reachable = walker.distances(located[0], towards=towards) if walker and located else {}
         links: dict[int, WalkLink] = {}
         for stop_index, straight in nearby:
+            if stop_index in blocked_stops:
+                continue
             stop = self.network.stops[stop_index]
             snapped = walker.locate(stop.lat, stop.lon) if reachable and walker else None
             if snapped and snapped[0] in reachable:
@@ -218,7 +311,9 @@ class JourneyPlanner:
         if link.source == "campus_graph" and walker:
             first, second = walker.locate(start.lat, start.lon), walker.locate(end.lat, end.lon)
             if first and second and first[0] != second[0]:
-                geometry = walker.path(first[0], second[0]) or geometry
+                path = walker.path(first[0], second[0])
+                if path:
+                    geometry = [[start.lon, start.lat], *path, [end.lon, end.lat]]
         duration = int(link.distance_m / speed)
         return {
             "mode": "walk",
@@ -254,7 +349,7 @@ class JourneyPlanner:
             "route_description": long_name,
             "stop_count": len(stops) - 1,
             "fare_inr": fare,
-            "geometry": [[stop.lon, stop.lat] for stop in stops],
+            "geometry": self.network.ride_path(pattern, ride.board, ride.alight),
             "_departure_s": departure,
             "_arrival_s": arrival,
         }
@@ -306,6 +401,8 @@ class JourneyPlanner:
                 measured = walker.distances(first[0], towards=False).get(second[0])
                 if measured is not None:
                     link = WalkLink(measured + first[1] + second[1], "campus_graph")
+                elif blocked or wheelchair:
+                    return None  # Disruptions or the profile leave no walkable path.
         if link.distance_m > max_walk:
             return None
         leg = self._walk_leg(origin, destination, link, walker, speed, now)
@@ -326,7 +423,7 @@ class JourneyPlanner:
             notes.append("Fares are not published in the " + " and ".join(names[mode] for mode in unknown_fares)
                          + " data, so the total is incomplete.")
         if any(leg.get("walk_source") == "estimated" for leg in legs):
-            notes.append("Walking outside the SRM campus is estimated from straight-line distance.")
+            notes.append("Walking outside mapped paths is estimated from straight-line distance.")
         warnings = ["Wheelchair access is unverified: these feeds publish no boarding accessibility data."] \
             if wheelchair and transit_legs else []
         identity = json.dumps(signature, separators=(",", ":"))

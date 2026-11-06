@@ -267,3 +267,23 @@ test("creates private expiring report evidence storage and a review queue", () =
     AuthorizationType: "JWT",
   });
 });
+
+test("adds satellite imagery, street walking paths and API throttling", () => {
+  const rendered = template();
+  rendered.hasResourceProperties("AWS::Location::Map", {
+    MapName: "EzPathSrmSatelliteMap",
+    Configuration: { Style: "RasterEsriImagery" },
+  });
+  rendered.hasResourceProperties("AWS::Location::RouteCalculator", {
+    CalculatorName: "EzPathWalkingRoutes",
+    DataSource: "Esri",
+  });
+  rendered.hasResourceProperties("AWS::IAM::Policy", {
+    PolicyDocument: Match.objectLike({
+      Statement: Match.arrayWith([Match.objectLike({ Action: "geo:CalculateRoute" })]),
+    }),
+  });
+  rendered.hasResourceProperties("AWS::ApiGatewayV2::Stage", {
+    DefaultRouteSettings: { ThrottlingBurstLimit: 40, ThrottlingRateLimit: 20 },
+  });
+});

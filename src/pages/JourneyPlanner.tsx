@@ -68,9 +68,10 @@ export const JourneyPlanner: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full flex-1 h-[calc(100vh-134px)] min-h-[600px] overflow-hidden bg-slate-100">
+    <div className="relative w-full flex-1 lg:h-[calc(100vh-134px)] lg:min-h-[600px] lg:overflow-hidden bg-slate-100">
+      <h1 className="sr-only">Plan a journey</h1>
       {/* 1. FULL-PAGE EDGE-TO-EDGE MAP (Spans whole screen underneath everything) */}
-      <div className="absolute inset-0 w-full h-full z-0">
+      <div className="relative h-[46vh] w-full lg:absolute lg:inset-0 lg:h-full z-0">
         <InteractiveMap
           routes={routes}
           selectedRouteId={selectedRouteId}
@@ -80,13 +81,13 @@ export const JourneyPlanner: React.FC = () => {
       </div>
 
       {/* 2. FLOATING PANELS & COMPONENTS LAYER */}
-      <div className="absolute inset-0 z-10 pointer-events-none p-3 sm:p-5 flex flex-col lg:flex-row justify-between items-start gap-4 overflow-hidden">
+      <div className="relative z-10 lg:absolute lg:inset-0 lg:pointer-events-none p-3 sm:p-5 flex flex-col lg:flex-row justify-between items-start gap-4 lg:overflow-hidden">
 
         {/* LEFT FLOATING PANEL — Journey Requirements Form */}
         {leftOpen ? (
           <aside 
             aria-label="Journey Planning Controls"
-            className="pointer-events-auto w-full lg:w-[370px] max-h-[calc(100vh-170px)] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-floating flex flex-col overflow-hidden animate-in fade-in slide-in-from-left-4 duration-200"
+            className="pointer-events-auto w-full lg:w-[370px] lg:max-h-[calc(100vh-170px)] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-floating flex flex-col overflow-hidden animate-in fade-in slide-in-from-left-4 duration-200"
           >
             {/* Top Header */}
             <div className="p-3.5 border-b border-subtle-border flex items-center justify-between bg-slate-50/70">
@@ -123,7 +124,7 @@ export const JourneyPlanner: React.FC = () => {
         {rightOpen ? (
           <aside
             aria-label="Route Results and Inspection"
-            className="pointer-events-auto w-full lg:w-[390px] max-h-[calc(100vh-170px)] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-floating flex flex-col overflow-hidden animate-in fade-in slide-in-from-right-4 duration-200"
+            className="pointer-events-auto w-full lg:w-[390px] lg:max-h-[calc(100vh-170px)] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-floating flex flex-col overflow-hidden animate-in fade-in slide-in-from-right-4 duration-200"
           >
             {/* Top Header */}
             <div className="p-3.5 border-b border-subtle-border flex items-center justify-between bg-slate-50/70">
@@ -167,8 +168,8 @@ export const JourneyPlanner: React.FC = () => {
               {isLoading && (
                 <div className="space-y-3 py-6 text-center">
                   <div className="inline-block animate-spin w-8 h-8 border-4 border-accent border-t-transparent rounded-full mb-2" />
-                  <div className="text-xs font-semibold text-ink">Evaluating Multimodal Network...</div>
-                  <div className="text-[11px] text-slate-500">Checking elevator telemetry and step-free constraints</div>
+                  <div className="text-xs font-semibold text-ink">Finding your routes</div>
+                  <div className="text-[11px] text-slate-500">Checking timetables, walking limits and reported disruptions</div>
                 </div>
               )}
 
@@ -177,7 +178,7 @@ export const JourneyPlanner: React.FC = () => {
                 <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-ink space-y-2">
                   <div className="flex items-center gap-1.5 font-bold text-disruption">
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>No Feasible Accessible Route</span>
+                    <span>No route found</span>
                   </div>
                   <p className="text-slate-600 leading-relaxed">{error}</p>
                 </div>

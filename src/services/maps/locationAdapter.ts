@@ -1,5 +1,6 @@
 export interface MapConfig {
   style: string | null;
+  satelliteStyle: string | null;
   provider: 'amazon-location';
   configurationError: string | null;
   defaultCenter: [number, number];
@@ -11,6 +12,7 @@ export interface MapConfig {
 
 export interface LocationMapOptions {
   mapName?: string;
+  satelliteMapName?: string;
   region?: string;
   apiKey?: string;
   demoMode?: boolean;
@@ -18,25 +20,29 @@ export interface LocationMapOptions {
 
 export class LocationMapAdapter {
   private readonly mapName?: string;
+  private readonly satelliteMapName?: string;
   private readonly region?: string;
   private readonly apiKey?: string;
 
   constructor(options: LocationMapOptions = {}) {
     this.mapName = options.mapName ?? import.meta.env.VITE_LOCATION_MAP_NAME;
+    this.satelliteMapName = options.satelliteMapName ?? import.meta.env.VITE_LOCATION_SATELLITE_MAP_NAME;
     this.region = options.region ?? import.meta.env.VITE_AWS_REGION;
     this.apiKey = options.apiKey ?? import.meta.env.VITE_LOCATION_API_KEY;
   }
 
   getMapConfig(): MapConfig {
     const hasAwsConfig = Boolean(this.mapName && this.region && this.apiKey);
-    const style = hasAwsConfig
+    const styleUrl = (name?: string) => (hasAwsConfig && name
       ? `https://maps.geo.${this.region}.amazonaws.com/maps/v0/maps/${encodeURIComponent(
-          this.mapName!,
+          name,
         )}/style-descriptor?key=${encodeURIComponent(this.apiKey!)}`
-      : null;
+      : null);
+    const style = styleUrl(this.mapName);
 
     return {
       style,
+      satelliteStyle: styleUrl(this.satelliteMapName),
       provider: 'amazon-location',
       configurationError: hasAwsConfig
         ? null

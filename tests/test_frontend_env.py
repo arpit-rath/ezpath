@@ -9,6 +9,7 @@ STACK_OUTPUTS = {
     "ApiUrl": "https://api.example",
     "AwsRegion": "ap-south-1",
     "LocationMapName": "EzPathSrmCampusMap",
+    "LocationSatelliteMapName": "EzPathSrmSatelliteMap",
     "OperatorUserPoolId": "ap-south-1_pool",
     "OperatorUserPoolClientId": "client-id",
     "OperatorUserPoolDomain": "https://ezpath-operators.auth.ap-south-1.amazoncognito.com",

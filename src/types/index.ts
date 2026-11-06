@@ -239,16 +239,32 @@ export type CommunityReportStatus =
   | 'VERIFIED'
   | 'REJECTED';
 
+export type ReportIssueType =
+  | 'lift_outage'
+  | 'path_blocked'
+  | 'entrance_closed'
+  | 'transit_delay'
+  | 'other';
+
+export const REPORT_ISSUES: { id: ReportIssueType; label: string; eventType: DisruptionEvent['type'] }[] = [
+  { id: 'lift_outage', label: 'Lift or escalator not working', eventType: 'elevator_outage' },
+  { id: 'path_blocked', label: 'Path or ramp blocked', eventType: 'path_closure' },
+  { id: 'entrance_closed', label: 'Entrance closed', eventType: 'entrance_closure' },
+  { id: 'transit_delay', label: 'Bus, metro or train problem', eventType: 'service_delay' },
+  { id: 'other', label: 'Something else', eventType: 'service_delay' },
+];
+
 export interface CommunityReport {
   reportId: string;
   status: CommunityReportStatus;
+  issueType: ReportIssueType;
   description: string;
   locationId: string;
   locationName: string;
   latitude: number;
   longitude: number;
-  photoUrl: string;
-  contentType: string;
+  photoUrl?: string | null;
+  contentType?: string | null;
   createdAt: string;
   submittedAt?: string;
   reviewedAt?: string;

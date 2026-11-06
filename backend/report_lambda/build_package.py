@@ -21,10 +21,8 @@ def build(output: Path = DEFAULT_OUTPUT) -> Path:
     output.mkdir(parents=True)
     for name in ("handler.py", "repository.py"):
         shutil.copy2(SOURCE / name, output / name)
-    shutil.copy2(
-        ROOT / "traversal" / "routing" / "config" / "campus-locations.json",
-        output / "campus-locations.json",
-    )
+    for name in ("campus-locations.json", "chennai-locations.json"):
+        shutil.copy2(ROOT / "traversal" / "routing" / "config" / name, output / name)
     return output
 
 

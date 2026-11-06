@@ -12,6 +12,7 @@ OUTPUT_TO_ENV = {
     "ApiUrl": "VITE_API_BASE_URL",
     "AwsRegion": "VITE_AWS_REGION",
     "LocationMapName": "VITE_LOCATION_MAP_NAME",
+    "LocationSatelliteMapName": "VITE_LOCATION_SATELLITE_MAP_NAME",
     "OperatorUserPoolId": "VITE_COGNITO_USER_POOL_ID",
     "OperatorUserPoolClientId": "VITE_COGNITO_CLIENT_ID",
     "OperatorUserPoolDomain": "VITE_COGNITO_DOMAIN",

@@ -52,3 +52,18 @@ describe('LocationMapAdapter', () => {
     ]);
   });
 });
+
+describe('LocationMapAdapter satellite view', () => {
+  it('builds a satellite style from its own map resource', () => {
+    const adapter = new LocationMapAdapter({
+      mapName: 'Street',
+      satelliteMapName: 'Satellite',
+      region: 'ap-south-1',
+      apiKey: 'key',
+    });
+
+    expect(adapter.getMapConfig().satelliteStyle).toBe(
+      'https://maps.geo.ap-south-1.amazonaws.com/maps/v0/maps/Satellite/style-descriptor?key=key',
+    );
+  });
+});

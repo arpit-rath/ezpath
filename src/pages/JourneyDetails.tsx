@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useJourneyStore, getStationName } from '../stores/journeyStore';
 import { ItineraryTimeline } from '../components/journey/ItineraryTimeline';
-import { saveJourney, isOffline } from '../services/offline/idbStorage';
+import { getSavedJourneyByRouteId, saveJourney, isOffline } from '../services/offline/idbStorage';
 import { 
   ArrowLeft, 
   Bookmark, 
@@ -17,7 +17,24 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { JourneyRoute, SavedJourney } from '../types';
 import { fareLabel } from '../utils/fare';
+
+function routeFromSaved(saved: SavedJourney): JourneyRoute {
+  return {
+    ...saved,
+    id: saved.routeId,
+    label: 'Saved journey',
+    categoryTags: [],
+    totalDistanceMeters: saved.walkingDistanceMeters,
+    isStepFree: false,
+    isWheelchairAccessible: false,
+    accessibilityStatus: 'uncertain',
+    isFeasible: true,
+    reliabilityScore: null,
+    evidenceConfidence: 'low',
+  };
+}
 
 export const JourneyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -36,12 +53,27 @@ export const JourneyDetails: React.FC = () => {
     };
   }, []);
 
-  const route = routes.find(r => r.id === id) || routes[0];
+  const liveRoute = routes.find(r => r.id === id);
+  const [saved, setSaved] = useState<SavedJourney | null>(null);
+  const [lookupDone, setLookupDone] = useState(false);
+
+  useEffect(() => {
+    if (liveRoute || !id) return;
+    getSavedJourneyByRouteId(id)
+      .then((journey) => setSaved(journey ?? null))
+      .catch(() => setSaved(null))
+      .finally(() => setLookupDone(true));
+  }, [id, liveRoute]);
+
+  const route = liveRoute ?? (saved ? routeFromSaved(saved) : undefined);
+  const originName = saved && !liveRoute ? saved.originName : getStationName(originId);
+  const destinationName = saved && !liveRoute ? saved.destinationName : getStationName(destinationId);
 
   if (!route) {
+    if (!liveRoute && !lookupDone) return <div className="product-page text-sm text-slate-600" aria-live="polite">Loading journey…</div>;
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center space-y-4">
-        <h2 className="font-heading font-bold text-2xl text-ink">Journey Not Found</h2>
+        <h1 className="font-heading font-bold text-2xl text-ink">Journey not found</h1>
         <p className="text-slate-600 text-sm">Please return to the planner to search for accessible routes.</p>
         <Link to="/plan">
           <Button variant="primary">Return to Journey Planner</Button>
@@ -54,8 +86,8 @@ export const JourneyDetails: React.FC = () => {
     try {
       await saveJourney(
         route, 
-        getStationName(originId), 
-        getStationName(destinationId)
+        originName, 
+        destinationName
       );
       setIsSaved(true);
     } catch {
@@ -125,7 +157,7 @@ export const JourneyDetails: React.FC = () => {
               {route.label}
             </div>
             <h1 className="journey-title">
-              {getStationName(originId)} → {getStationName(destinationId)}
+              {originName} → {destinationName}
             </h1>
           </div>
 
@@ -148,7 +180,7 @@ export const JourneyDetails: React.FC = () => {
               <Clock className="w-3.5 h-3.5 text-accent" /> Total Time
             </div>
             <div className="font-heading font-extrabold text-xl text-ink">
-              {route.totalDurationMinutes} min
+              {Math.round(route.totalDurationMinutes)} min
             </div>
             <div className="text-[10px] text-ink-muted">
               {route.departureTime} &ndash; {route.arrivalTime}
@@ -172,7 +204,7 @@ export const JourneyDetails: React.FC = () => {
               <Footprints className="w-3.5 h-3.5 text-accent" /> Walking
             </div>
             <div className="font-heading font-extrabold text-xl text-ink">
-              {route.walkingDistanceMeters} m
+              {Math.round(route.walkingDistanceMeters)} m
             </div>
             <div className="text-[10px] text-ink-muted">
               {route.accessibilityStatus ? 'Total walking on this journey' : 'Max slope < 1:14'}

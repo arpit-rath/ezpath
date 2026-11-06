@@ -6,7 +6,11 @@ import json
 import networkx as nx
 import pytest
 
+from routing.catalog import expand_blocked
 from routing.journeys import JourneyPlanner
+from routing.router import _edge_points
+from routing.shapes import simplify, stop_offsets
+from routing.street_paths import StreetWalker
 from routing.service import RouteRequestError
 from routing.transit import TransitNetwork
 from routing.transit_build import FeedSource, build_artifact, write_artifact
@@ -160,3 +164,132 @@ def test_request_and_response_match_published_schemas(network):
     jsonschema.Draft202012Validator(
         json.loads((contracts / "journey-response.schema.json").read_text(encoding="utf-8"))
     ).validate(json.loads(json.dumps(response)))
+
+
+def test_shows_the_fastest_journey_for_each_mode_mix(network):
+    journeys = [
+        {"modes": ["walk", "bus"], "metrics": {"arrival_s": 100, "transfers": 0}},
+        {"modes": ["walk", "bus"], "metrics": {"arrival_s": 110, "transfers": 0}},
+        {"modes": ["walk", "bus"], "metrics": {"arrival_s": 120, "transfers": 0}},
+        {"modes": ["walk", "metro"], "metrics": {"arrival_s": 200, "transfers": 0}},
+    ]
+
+    chosen = JourneyPlanner._select(journeys, 2)
+
+    assert [journey["metrics"]["arrival_s"] for journey in chosen] == [100, 200]
+
+
+def test_no_route_message_names_the_missing_mode(network):
+    response = JourneyPlanner(network).plan(request(
+        constraints={"max_walking_distance_m": 1500, "modes": ["metro"]},
+    ))
+
+    assert response["status"] == "no_route"
+    assert "Metro has no stop within your walking limit of End" in response["message"]
+
+
+def test_blocked_stop_is_not_served(network, monkeypatch):
+    bravo = next(index for index, stop in enumerate(network.stops) if stop.name == "Bravo")
+    monkeypatch.setattr(JourneyPlanner, "_blocked_stops", lambda self, blocked: frozenset({bravo}))
+
+    response = JourneyPlanner(network).plan(request())
+
+    assert response["status"] == "no_route"
+
+
+def test_street_paths_replace_estimated_walks(network):
+    class Streets:
+        def path(self, start, end):
+            return 900.0, [[80.2, 13.0], [80.201, 13.001], [80.2, 13.002]]
+
+    response = JourneyPlanner(network, street_walker=Streets()).plan(request())
+
+    walks = [leg for leg in response["journeys"][0]["legs"] if leg.get("walk_source") == "street_path"]
+    assert walks
+    assert len(walks[0]["geometry"]) == 3
+
+
+def test_failed_street_lookup_keeps_the_estimate(network):
+    class Streets:
+        def path(self, start, end):
+            return None
+
+    response = JourneyPlanner(network, street_walker=Streets()).plan(request())
+
+    assert all(leg.get("walk_source") != "street_path" for leg in response["journeys"][0]["legs"])
+
+
+def test_street_walker_reads_amazon_location_responses():
+    class Client:
+        def calculate_route(self, **kwargs):
+            assert kwargs["TravelMode"] == "Walking"
+            assert kwargs["DeparturePosition"] == [80.2, 13.0]
+            return {
+                "Summary": {"Distance": 0.5},
+                "Legs": [{"Geometry": {"LineString": [[80.2, 13.0], [80.21, 13.01]]}}],
+            }
+
+    assert StreetWalker("calculator", Client()).path((13.0, 80.2), (13.01, 80.21)) == (
+        500.0, [[80.2, 13.0], [80.21, 13.01]],
+    )
+
+
+def test_street_walker_returns_none_on_failure():
+    class Client:
+        def calculate_route(self, **kwargs):
+            raise RuntimeError("service unavailable")
+
+    assert StreetWalker("calculator", Client()).path((13.0, 80.2), (13.01, 80.21)) is None
+
+
+def test_ride_path_uses_the_mapped_shape_between_stops(network):
+    pattern = network.patterns[0]
+    network.shapes.append([[80.2, 13.0], [80.21, 13.01], [80.2, 13.03]])
+    pattern.shape = len(network.shapes) - 1
+    pattern.offsets = [0, 2]
+
+    assert network.ride_path(pattern, 0, 1) == [[80.2, 13.0], [80.21, 13.01], [80.2, 13.03]]
+
+
+def test_graphml_geometry_text_is_used_for_campus_lines():
+    assert _edge_points("LINESTRING (80.1 12.8, 80.2 12.9, 80.3 12.95)") == [
+        [80.1, 12.8], [80.2, 12.9], [80.3, 12.95],
+    ]
+
+
+def test_disrupted_named_place_blocks_nearby_campus_nodes():
+    graph = nx.MultiDiGraph()
+    graph.add_node(1, x=80.0425857, y=12.8232845)
+    graph.add_node(2, x=80.0600000, y=12.8400000)
+
+    assert "node:1" in expand_blocked(["srm-library"], graph)
+    assert "node:2" not in expand_blocked(["srm-library"], graph)
+
+
+def test_simplify_keeps_the_shape_and_drops_redundant_points():
+    line = [[80.0, 13.0], [80.00001, 13.00001], [80.1, 13.1], [80.2, 13.0]]
+
+    assert simplify(line) == [[80.0, 13.0], [80.1, 13.1], [80.2, 13.0]]
+
+
+def test_stop_offsets_only_move_forward():
+    shape = [[0.0, 0.0], [0.0, 0.01], [0.0, 0.02], [0.0, 0.03]]
+
+    offsets, gaps = stop_offsets(shape, [[0.0, 0.0], [0.0, 0.021], [0.0, 0.03]])
+
+    assert offsets == [0, 2, 3]
+    assert max(gaps) < 200
+
+
+def test_campus_walks_ignore_disconnected_path_fragments(network):
+    graph = nx.MultiDiGraph(crs="epsg:4326")
+    graph.add_node(1, x=80.2000, y=13.0600)
+    graph.add_node(2, x=80.2010, y=13.0600)
+    graph.add_node(3, x=80.2020, y=13.0600)
+    graph.add_node(9, x=80.2002, y=13.0000)  # Fragment beside the origin.
+    for u, v in ((1, 2), (2, 1), (2, 3), (3, 2)):
+        graph.add_edge(u, v, key=0, length=110.0, highway="footway", osmid=u)
+
+    planner = JourneyPlanner(network, graph)
+
+    assert 9 not in planner.connected_nodes

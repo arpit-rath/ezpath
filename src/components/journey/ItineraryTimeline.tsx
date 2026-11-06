@@ -59,8 +59,8 @@ export const ItineraryTimeline: React.FC<ItineraryTimelineProps> = ({ legs }) =>
                 </div>
 
                 <div className="text-right shrink-0">
-                  <span className="font-bold text-ink">{leg.durationMinutes} min</span>
-                  <div className="text-[10px] text-ink-muted">{leg.distanceMeters} m</div>
+                  <span className="font-bold text-ink">{Math.max(1, Math.round(leg.durationMinutes))} min</span>
+                  <div className="text-[10px] text-ink-muted">{Math.round(leg.distanceMeters)} m</div>
                 </div>
               </div>
 

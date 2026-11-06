@@ -9,11 +9,14 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 from typing import Any
 
+from routing.catalog import expand_blocked
 from routing.graph import load_graph
 from routing.journeys import JourneyPlanner
 from routing.service import RouteRequestError, RoutingService
+from routing.street_paths import StreetWalker
 from routing.transit import TransitNetwork
 
 try:
@@ -86,7 +89,11 @@ def _get_planner(service: RoutingService) -> JourneyPlanner | None:
         try:
             local_path, bucket, key = transit_settings_from_environment()
             path = ensure_graph_artifact(local_path, bucket=bucket, key=key)
-            _planner = JourneyPlanner(TransitNetwork.load(path), service.graph, service.graph_version)
+            calculator = os.environ.get("EZPATH_ROUTE_CALCULATOR")
+            _planner = JourneyPlanner(
+                TransitNetwork.load(path), service.graph, service.graph_version,
+                StreetWalker(calculator) if calculator else None,
+            )
         except Exception:
             LOGGER.exception("transit artifact unavailable")
     return _planner
@@ -147,7 +154,7 @@ def handle_event(
             )
         result = service.route(
             payload,
-            blocked_entity_ids=blocked_entity_ids,
+            blocked_entity_ids=expand_blocked(blocked_entity_ids, service.graph),
             status_overlay=overlay,
         )
         return _json_response(200, result)
@@ -177,7 +184,5 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 def _get_status_provider() -> DynamoStatusProvider:
     global _status_provider
     if _status_provider is None:
-        import os
-
         _status_provider = DynamoStatusProvider(os.environ.get("EZPATH_STATUS_TABLE", ""))
     return _status_provider

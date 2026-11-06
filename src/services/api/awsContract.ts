@@ -104,7 +104,7 @@ export function buildAwsRouteRequest(
 }
 
 function clockTime(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 }
 
 function edgeLeg(

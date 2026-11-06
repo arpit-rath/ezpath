@@ -21,22 +21,25 @@ LOGGER.setLevel(logging.INFO)
 ALLOWED_CONTENT_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
 UPLOAD_EXPIRY_SECONDS = 300
+ISSUE_TYPES = {"lift_outage", "path_blocked", "entrance_closed", "transit_delay", "other"}
 _repository: DynamoReportRepository | None = None
 _s3_client: Any | None = None
 
 
-def _locations_path() -> Path:
+def _locations_folder() -> Path:
     handler_path = Path(__file__).resolve()
-    packaged = handler_path.parent / "campus-locations.json"
-    if packaged.is_file():  # Lambda package
-        return packaged
-    return handler_path.parents[2] / "traversal" / "routing" / "config" / "campus-locations.json"
+    if (handler_path.parent / "campus-locations.json").is_file():  # Lambda package
+        return handler_path.parent
+    return handler_path.parents[2] / "traversal" / "routing" / "config"
 
 
 @lru_cache(maxsize=1)
 def _campus_locations() -> dict[str, dict[str, Any]]:
-    data = json.loads(_locations_path().read_text(encoding="utf-8"))
-    return {location["id"]: location for location in data["locations"]}
+    locations: dict[str, dict[str, Any]] = {}
+    for name in ("campus-locations.json", "chennai-locations.json"):
+        data = json.loads((_locations_folder() / name).read_text(encoding="utf-8"))
+        locations.update({location["id"]: location for location in data["locations"]})
+    return locations
 
 
 class ReportRequestError(ValueError):
@@ -113,18 +116,24 @@ def handle_event(event: dict[str, Any], repository: Any, s3_client: Any, bucket:
             return _response(201, {"reportId": report_id, "uploadUrl": url, "expiresInSeconds": UPLOAD_EXPIRY_SECONDS})
         if route == "POST /v1/reports":
             payload = _body(event)
-            report_id = _text(payload, "reportId", 64)
             location_id = _text(payload, "locationId", 128)
             location = _campus_locations().get(location_id)
             if location is None:
-                raise ReportRequestError("locationId must be an SRM campus location")
+                raise ReportRequestError("locationId must be a known Chennai or SRM location")
+            issue_type = _text(payload, "issueType", 32)
+            if issue_type not in ISSUE_TYPES:
+                raise ReportRequestError("issueType is not supported")
             details = {
+                "issueType": issue_type,
                 "description": _text(payload, "description", 500),
                 "locationId": location_id,
                 "locationName": location["name"],
                 "latitude": location["latitude"],
                 "longitude": location["longitude"],
             }
+            if payload.get("reportId") is None:
+                return _response(201, public_receipt(repository.create_report(str(uuid4()), details)))
+            report_id = _text(payload, "reportId", 64)
             key_prefix = f"reports/{report_id}/"
             objects = s3_client.list_objects_v2(Bucket=bucket, Prefix=key_prefix, MaxKeys=1).get("Contents", [])
             if not objects:
@@ -139,8 +148,9 @@ def handle_event(event: dict[str, Any], repository: Any, s3_client: Any, bucket:
         if route == "GET /v1/reports":
             reports = repository.list_pending()
             for report in reports:
-                report["photoUrl"] = s3_client.generate_presigned_url(
-                    "get_object", Params={"Bucket": bucket, "Key": report.pop("photoKey")}, ExpiresIn=300
+                photo_key = report.pop("photoKey")
+                report["photoUrl"] = photo_key and s3_client.generate_presigned_url(
+                    "get_object", Params={"Bucket": bucket, "Key": photo_key}, ExpiresIn=300
                 )
             return _response(200, reports)
         if route in {"POST /v1/reports/{reportId}/verify", "POST /v1/reports/{reportId}/reject"}:
@@ -164,8 +174,16 @@ def _dependencies() -> tuple[DynamoReportRepository, Any, str]:
         _repository = DynamoReportRepository(table)
     if _s3_client is None:
         import boto3
+        from botocore.config import Config
 
-        _s3_client = boto3.client("s3")
+        # Browsers cannot follow the redirects the global S3 endpoint sends for new buckets.
+        region = os.environ["AWS_REGION"]
+        _s3_client = boto3.client(
+            "s3",
+            region_name=region,
+            endpoint_url=f"https://s3.{region}.amazonaws.com",
+            config=Config(signature_version="s3v4"),
+        )
     return _repository, _s3_client, bucket
 
 

@@ -14,16 +14,19 @@ DATA_ROOT = ROUTING_ROOT.parents[1] / "data"
 DEFAULT_OUTPUT = ROUTING_ROOT / "data" / "chennai-transit.json.gz"
 DEFAULT_CATALOG = ROUTING_ROOT / "config" / "chennai-locations.json"
 
+BUS_DATA = DATA_ROOT / "static_mtc_gtfs_data" / "static_mtc_gtfs_data"
+RAIL_DATA = DATA_ROOT / "Southern Railways" / "Southern Railways"
+
 SOURCES = (
     # The published metro calendar ended in 2021, so it is used as a typical schedule.
     FeedSource("metro", "Chennai Metro Rail (CMRL)", "metro", DATA_ROOT / "CMRL gtfs" / "CMRL gtfs",
                ignore_calendar=True),
-    FeedSource("rail", "Southern Railway suburban", "rail",
-               DATA_ROOT / "Southern Railways" / "Southern Railways" / "chennai.suburban.gtfs.zip"),
-    FeedSource("bus", "Chennai MTC bus (CUMTA)", "bus",
-               DATA_ROOT / "static_mtc_gtfs_data" / "static_mtc_gtfs_data" / "chennai.bus.gtfs.zip"),
+    FeedSource("rail", "Southern Railway suburban", "rail", RAIL_DATA / "chennai.suburban.gtfs.zip",
+               shape_paths=(RAIL_DATA / "srr_corridor.geojson",)),
+    FeedSource("bus", "Chennai MTC bus (CUMTA)", "bus", BUS_DATA / "chennai.bus.gtfs.zip",
+               shape_paths=(BUS_DATA / "routes_polyline.geojson", BUS_DATA / "all_mtc_routes.geojson")),
 )
-TERMINI = DATA_ROOT / "static_mtc_gtfs_data" / "static_mtc_gtfs_data" / "bus_terminus.geojson"
+TERMINI = BUS_DATA / "bus_terminus.geojson"
 
 
 def main() -> None:
@@ -42,6 +45,7 @@ def main() -> None:
     print(f"Patterns: {len(artifact['patterns'])}")
     print(f"Trips: {trips}")
     print(f"Metro fare pairs: {len(artifact['fares'])}")
+    print(f"Shapes: {len(artifact['shapes'])}; patterns with real paths: {artifact['shape_coverage']}")
     print(f"Stops excluded from walking: {len(artifact['unreliable_stops'])}")
     print(f"Catalog locations: {len(catalog['locations'])}")
     print(f"Artifact: {args.output} ({args.output.stat().st_size} bytes)")

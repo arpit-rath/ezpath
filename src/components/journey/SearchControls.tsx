@@ -1,6 +1,6 @@
 import React from 'react';
 import { useJourneyStore } from '../../stores/journeyStore';
-import { LOCATION_GROUPS } from '../../data/networkLocations';
+import { getCampusLocation, LOCATION_GROUPS } from '../../data/networkLocations';
 import { isDemoMode } from '../../config/runtime';
 import { ProfileBuilder } from '../accessibility/ProfileBuilder';
 import { Button } from '../ui/Button';
@@ -29,8 +29,9 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
     searchJourneys,
     isLoading,
     profile,
-    updateProfileConstraint
+    setAllowedModes
   } = useJourneyStore();
+  const campusTrip = !isDemoMode && Boolean(getCampusLocation(originId) && getCampusLocation(destinationId));
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,10 +43,10 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
     const current = profile.allowedModes;
     if (current.includes(mode)) {
       if (current.filter(m => m !== 'walking').length > 1) {
-        updateProfileConstraint('allowedModes', current.filter(m => m !== mode));
+        setAllowedModes(current.filter(m => m !== mode));
       }
     } else {
-      updateProfileConstraint('allowedModes', [...current, mode]);
+      setAllowedModes([...current, mode]);
     }
   };
 
@@ -99,7 +100,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
             type="button"
             onClick={swapLocations}
             aria-label="Swap starting location and destination"
-            className="p-1 rounded-full bg-slate-100 hover:bg-slate-200 text-ink-muted hover:text-ink transition-colors border border-subtle-border"
+            className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-ink-muted hover:text-ink transition-colors border border-subtle-border"
           >
             <ArrowUpDown className="w-3.5 h-3.5" />
           </button>
@@ -144,7 +145,9 @@ export const SearchControls: React.FC<SearchControlsProps> = ({ onSearch }) => {
         </div>
         {!isDemoMode && (
           <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-            Times come from published timetables, not live vehicle positions. Trips inside SRM use mapped campus paths.
+            {campusTrip
+              ? 'Both places are on the SRM campus, so this is a walking route and these modes do not apply.'
+              : 'Results update when you change a mode. Times come from published timetables, not live vehicle positions.'}
           </p>
         )}
       </div>

@@ -32,7 +32,7 @@ class Stop:
 class Pattern:
     """Trips sharing one route and stop sequence, stored by stop position."""
 
-    __slots__ = ("route", "stops", "masks", "times", "mode")
+    __slots__ = ("route", "stops", "masks", "times", "mode", "shape", "offsets")
 
     def __init__(self, data: dict[str, Any], mode: str) -> None:
         self.route: int = data["route"]
@@ -40,6 +40,8 @@ class Pattern:
         self.stops: list[int] = data["stops"]
         self.masks = array("B", data["masks"])
         self.times = [array("I", column) for column in data["times"]]
+        self.shape: int | None = data.get("shape")
+        self.offsets: list[int] | None = data.get("offsets")
 
     def first_trip(self, position: int, earliest: int, day_bit: int) -> int | None:
         column = self.times[position]
@@ -81,6 +83,7 @@ class TransitNetwork:
         self.stops = [Stop(*row) for row in data["stops"]]
         self.routes: list[list[str]] = data["routes"]
         self.fares: dict[str, float] = data["fares"]
+        self.shapes: list[list[list[float]]] = data.get("shapes", [])
         self.footpaths: list[list[list[float]]] = data["footpaths"]
         self.patterns = [Pattern(item, self.routes[item["route"]][2]) for item in data["patterns"]]
         self.stop_patterns: list[list[tuple[int, int]]] = [[] for _ in self.stops]
@@ -115,6 +118,14 @@ class TransitNetwork:
         found.sort()
         return [(index, distance) for distance, index in found[:limit]]
 
+    def ride_path(self, pattern: Pattern, board: int, alight: int) -> list[list[float]]:
+        """Return the mapped track or road between two stop positions."""
+        if pattern.shape is not None and pattern.offsets is not None:
+            start, end = pattern.offsets[board], pattern.offsets[alight]
+            if end > start:
+                return self.shapes[pattern.shape][start:end + 1]
+        return [[self.stops[stop].lon, self.stops[stop].lat] for stop in pattern.stops[board:alight + 1]]
+
     def metro_fare(self, board: int, alight: int) -> float | None:
         origin, destination = self.stops[board].zone, self.stops[alight].zone
         return self.fares.get(f"{origin}|{destination}")
@@ -128,6 +139,7 @@ class TransitNetwork:
         modes: Iterable[str],
         walking_speed_mps: float,
         max_rounds: int = 4,
+        blocked_stops: frozenset[int] = frozenset(),
     ) -> list[Itinerary]:
         """Return the earliest arrival for each number of vehicles boarded."""
         allowed = set(modes)
@@ -156,6 +168,8 @@ class TransitNetwork:
                 board = -1
                 for position in range(start, len(pattern.stops)):
                     stop = pattern.stops[position]
+                    if stop in blocked_stops:
+                        continue  # Vehicles may pass a closed stop without serving it.
                     if trip is not None:
                         arrival = pattern.times[position][trip]
                         if arrival < min(best[stop], target_best, deadline):
@@ -180,6 +194,8 @@ class TransitNetwork:
             for stop, label in list(current.items()):
                 for other, distance in self.footpaths[stop]:
                     target = int(other)
+                    if target in blocked_stops:
+                        continue
                     arrival = label.arrival + int(distance * 1.3 / walking_speed_mps)
                     if arrival < min(best[target], target_best, deadline):
                         best[target] = arrival
