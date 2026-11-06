@@ -124,6 +124,8 @@ def test_active_disruption_is_applied_to_route_request():
         "active_events": 1,
         "blocking_events": 1,
         "blocked_entity_ids": ["lift-a1"],
+        "facility_assessment": None,
+        "operator_confirmation": None,
     }
 
 
@@ -177,3 +179,20 @@ def test_journey_route_passes_live_blocks_to_the_planner():
     handle_event(_journey_event({}), _service(), Status(), planner)
 
     assert planner.blocked == frozenset({"node:1"})
+
+
+def test_public_evidence_endpoint_exposes_simulation_without_operator_identity():
+    class Status:
+        def get_snapshot(self):
+            return StatusSnapshot((), (), frozenset(),
+                {"facilityId": "rail-potheri", "quality": "SUSPECT", "effectiveState": "UNKNOWN",
+                 "flags": ["FROZEN_SEQUENCE"], "simulated": True},
+                {"state": "OPERATIONAL", "confirmedAt": "2026-11-06T10:00:00Z", "expiresAt": 9999999999})
+
+    response = handle_event({"routeKey": "GET /v1/telemetry/evidence"}, _service(), Status())
+
+    assert response["statusCode"] == 200
+    evidence = json.loads(response["body"])
+    assert evidence["quality"] == "SUSPECT"
+    assert evidence["operatorConfirmation"]["state"] == "OPERATIONAL"
+    assert "operatorId" not in response["body"]

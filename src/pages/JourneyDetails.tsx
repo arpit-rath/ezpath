@@ -38,7 +38,7 @@ function routeFromSaved(saved: SavedJourney): JourneyRoute {
 
 export const JourneyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { routes, originId, destinationId } = useJourneyStore();
+  const { routes, originId, destinationId, decision } = useJourneyStore();
   const [isSaved, setIsSaved] = useState(false);
   const [offline, setOffline] = useState(isOffline());
 
@@ -66,9 +66,18 @@ export const JourneyDetails: React.FC = () => {
   }, [id, liveRoute]);
 
   const route = liveRoute ?? (saved ? routeFromSaved(saved) : undefined);
+  const requiresConfirmation = Boolean(id && decision?.status !== 'READY' &&
+    decision?.missingFacts.some((fact) => fact.affectedRouteIds.includes(id)));
   const originName = saved && !liveRoute ? saved.originName : getStationName(originId);
   const destinationName = saved && !liveRoute ? saved.destinationName : getStationName(destinationId);
 
+  if (requiresConfirmation) {
+    return <div className="max-w-3xl mx-auto px-4 py-16 text-center space-y-4" role="alert">
+      <h1 className="font-heading font-bold text-2xl text-ink">Confirmation needed</h1>
+      <p className="text-slate-600 text-sm">This itinerary depends on the Potheri lift. Ask a station operator to confirm real lift and boarding access before relying on it.</p>
+      <Link to="/plan"><Button variant="primary">Return to Journey Planner</Button></Link>
+    </div>;
+  }
   if (!route) {
     if (!liveRoute && !lookupDone) return <div className="product-page text-sm text-slate-600" aria-live="polite">Loading journey…</div>;
     return (

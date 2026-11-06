@@ -117,7 +117,6 @@ def handle_event(
             },
         )
     try:
-        payload = _request_body(event)
         if status_provider is None:
             blocked_entity_ids = frozenset()
             overlay = None
@@ -137,6 +136,11 @@ def handle_event(
                 )
             blocked_entity_ids = snapshot.blocked_entity_ids
             overlay = snapshot.metadata()
+        if event.get("routeKey") == "GET /v1/telemetry/evidence":
+            from routing.evidence import assess
+            return _json_response(200, {**((overlay or {}).get("facility_assessment") or assess([])),
+                                        "operatorConfirmation": (overlay or {}).get("operator_confirmation")})
+        payload = _request_body(event)
         if event.get("routeKey") == JOURNEYS_ROUTE:
             if planner is None:
                 return _json_response(

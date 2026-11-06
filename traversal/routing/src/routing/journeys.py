@@ -12,6 +12,7 @@ from typing import Any
 import networkx as nx
 
 from .accessibility import evaluate_edge
+from .evidence import decide
 from .catalog import BLOCK_RADIUS_M, blocked_locations, expand_blocked
 from .graph import haversine_m
 from .router import route_candidates
@@ -158,6 +159,9 @@ class JourneyPlanner:
         wheelchair = profile.get("wheelchair_user", False)
         if not isinstance(wheelchair, bool):
             raise RouteRequestError("wheelchair_user must be a boolean")
+        requires_lift_status = profile.get("requires_lift_status", wheelchair)
+        if not isinstance(requires_lift_status, bool):
+            raise RouteRequestError("requires_lift_status must be a boolean")
         modes = constraints.get("modes", list(MODES))
         if not isinstance(modes, list) or not modes or any(mode not in MODES for mode in modes):
             raise RouteRequestError("modes must list bus, metro or rail")
@@ -186,7 +190,7 @@ class JourneyPlanner:
         egress = self._links(destination, walker, max_walk, blocked_stops, towards=True)
 
         journeys: dict[str, dict[str, Any]] = {}
-        direct = self._direct(origin, destination, walker, seconds_now, speed, max_walk, wheelchair)
+        direct = self._direct(origin, destination, walker, seconds_now, speed, max_walk, wheelchair, blocked)
         if direct:
             journeys[direct["journey_id"]] = direct
         if access and egress:
@@ -210,10 +214,14 @@ class JourneyPlanner:
         for journey in ordered:
             journey["metrics"].pop("arrival_s")
         self._add_street_paths(ordered, speed)
+        decision = decide(ordered, (status_overlay or {}).get("facility_assessment"),
+                          requires_lift_status=requires_lift_status,
+                          confirmation=(status_overlay or {}).get("operator_confirmation"))
         return {
             **base,
             "status": "ok" if ordered else "no_route",
             "journeys": ordered,
+            "decision": decision,
             "message": None if ordered else self._no_route_message(modes, access, egress, destination, blocked),
         }
 
@@ -392,7 +400,8 @@ class JourneyPlanner:
         return self._summary(legs, signature, leave, itinerary.arrival, len(rides) - 1, wheelchair)
 
     def _direct(self, origin: Point, destination: Point, walker: CampusWalker | None, now: int,
-                speed: float, max_walk: float, wheelchair: bool) -> dict[str, Any] | None:
+                speed: float, max_walk: float, wheelchair: bool,
+                blocked: frozenset[str]) -> dict[str, Any] | None:
         straight = haversine_m(origin.lat, origin.lon, destination.lat, destination.lon)
         link = WalkLink(straight * WALK_DETOUR, "estimated")
         if walker:

@@ -58,6 +58,9 @@ test("creates the ZIP-based Python Lambda and both HTTP routes", () => {
   rendered.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: "GET /health" });
   rendered.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: "POST /v1/routes" });
   rendered.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: "POST /v1/journeys" });
+  rendered.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+    RouteKey: "GET /v1/telemetry/evidence", AuthorizationType: "NONE",
+  });
   assert.ok(rendered.toJSON());
 });
 
@@ -85,6 +88,11 @@ test("creates the disruption Lambda and event API routes", () => {
     RouteKey: "POST /v1/events/{eventId}/resolve",
     AuthorizationType: "JWT",
   });
+  for (const path of ["simulate", "confirm"]) {
+    rendered.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+      RouteKey: `POST /v1/telemetry/${path}`, AuthorizationType: "JWT",
+    });
+  }
 });
 
 test("creates an MFA-protected Cognito operator pool", () => {

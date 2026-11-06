@@ -114,7 +114,7 @@ export class AwsApiClient implements ApiClient {
     const searchTimestamp = new Date().toISOString();
     const routes = mapAwsJourneyResponse(response, request, searchTimestamp);
     for (const route of routes) this.knownRoutes.set(route.id, route);
-    return { routes, searchTimestamp, graphVersion: this.graphVersion, message: response.message };
+    return { routes, searchTimestamp, graphVersion: this.graphVersion, message: response.message, decision: response.decision };
   }
 
   async replanRoute(routeId: string, request: JourneySearchRequest): Promise<ReplanResult> {

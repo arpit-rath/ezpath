@@ -236,6 +236,25 @@ describe('Chennai journeys', () => {
     expect(result.routes[0].arrivalTime).toBe('10:32');
   });
 
+  it('passes lift dependency and preserves the backend decision', async () => {
+    const response = journeyResponse();
+    response.decision = { status: 'NEEDS_CONFIRMATION', missingFacts: [{
+      question: 'Is the Potheri lift operational?', affectedRouteIds: ['journey-1'],
+    }] };
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({ ok: true, status: 200,
+      text: async () => JSON.stringify(response) } as Response));
+    const client = new AwsApiClient({ baseUrl: 'https://api.example.test',
+      fetchImpl: fetchImpl as typeof fetch, getToken: () => null });
+    const request = chennaiRequest();
+    request.profile = { ...DEFAULT_PROFILES.limited_walking };
+
+    const result = await client.searchRoutes(request);
+
+    expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)).profile.requires_lift_status).toBe(true);
+    expect(result.decision?.status).toBe('NEEDS_CONFIRMATION');
+    expect(result.routes[0].categoryTags).toEqual([]);
+  });
+
   it('keeps trips inside the campus on the walking graph endpoint', () => {
     expect(isCampusPair('srm-library', 'srm-global-hospitals')).toBe(true);
     expect(isCampusPair('rail-chennai-central-suburban', 'srm-library')).toBe(false);

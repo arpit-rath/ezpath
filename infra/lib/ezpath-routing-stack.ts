@@ -399,6 +399,23 @@ export class EzPathRoutingStack extends Stack {
       integration: disruptionIntegration,
     });
     httpApi.addRoutes({
+      path: "/v1/telemetry/simulate",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: disruptionIntegration,
+      authorizer: operatorAuthorizer,
+    });
+    httpApi.addRoutes({
+      path: "/v1/telemetry/evidence",
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: routeIntegration,
+    });
+    httpApi.addRoutes({
+      path: "/v1/telemetry/confirm",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: disruptionIntegration,
+      authorizer: operatorAuthorizer,
+    });
+    httpApi.addRoutes({
       path: "/v1/events",
       methods: [apigatewayv2.HttpMethod.POST],
       integration: disruptionIntegration,

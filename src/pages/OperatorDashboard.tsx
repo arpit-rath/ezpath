@@ -24,6 +24,7 @@ import { authService } from '../services/auth/cognito';
 import { isDemoMode } from '../config/runtime';
 import { DisruptionEvent } from '../types';
 import { CommunityReportQueue } from '../components/reports/CommunityReportQueue';
+import { SensorReliabilityLab } from '../components/operator/SensorReliabilityLab';
 import { ACTIVE_LOCATIONS, LOCATION_GROUPS, getJourneyLocationName } from '../data/networkLocations';
 
 function writeErrorMessage(reason: unknown): string {
@@ -260,6 +261,7 @@ export const OperatorDashboard: React.FC = () => {
       </div>
 
       {!isDemoMode && <CommunityReportQueue enabled={isAuthenticated} />}
+      {!isDemoMode && <SensorReliabilityLab enabled={isAuthenticated} />}
 
       {/* Manual Report Modal */}
       {isModalOpen && (

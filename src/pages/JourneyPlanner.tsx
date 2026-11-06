@@ -29,6 +29,7 @@ export const JourneyPlanner: React.FC = () => {
     destinationId,
     routes,
     selectedRouteId,
+    decision,
     setSelectedRouteId,
     searchJourneys,
     isLoading,
@@ -50,7 +51,11 @@ export const JourneyPlanner: React.FC = () => {
     }
   }, []);
 
-  const selectedRoute = routes.find(r => r.id === selectedRouteId) || routes[0] || null;
+  const selectedRoute = routes.find(r => r.id === selectedRouteId) ||
+    (decision && decision.status !== 'READY' ? null : routes[0]) || null;
+  const affectedRouteIds = new Set(decision?.status === 'READY' ? []
+    : decision?.missingFacts.flatMap((fact) => fact.affectedRouteIds) ?? []);
+  const selectedNeedsConfirmation = selectedRoute ? affectedRouteIds.has(selectedRoute.id) : false;
 
   const handleSaveCurrentJourney = async () => {
     if (!selectedRoute) return;
@@ -185,23 +190,36 @@ export const JourneyPlanner: React.FC = () => {
               )}
 
               {/* Route Cards List */}
+              {decision && decision.status !== 'READY' && (
+                <section role="status" aria-label="Journey needs confirmation" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-ink space-y-2">
+                  <h2 className="font-heading font-bold">Confirmation needed before recommending a route</h2>
+                  {decision.missingFacts.map(fact => (
+                    <div key={fact.question}>
+                      <p className="font-semibold">{fact.question}</p>
+                      {fact.whyItMatters && <p className="text-slate-700">{fact.whyItMatters}</p>}
+                    </div>
+                  ))}
+                  <p className="text-slate-700">Routes remain visible for comparison. Ask a station operator to confirm real lift and boarding access. Itineraries that depend on this lift are held until then.</p>
+                </section>
+              )}
               {!isLoading && routes.length > 0 && (
                 <div className="space-y-3">
                   {routes.map((route) => (
                     <RouteCard
                       key={route.id}
                       route={route}
+                      confirmationRequired={affectedRouteIds.has(route.id)}
                       isSelected={route.id === selectedRouteId}
                       onSelect={() => setSelectedRouteId(route.id)}
                       onOpenInspector={() => setConstraintInspectorOpen(true)}
-                      onViewDetails={() => navigate(`/journey/${route.id}`)}
+                      onViewDetails={affectedRouteIds.has(route.id) ? undefined : () => navigate(`/journey/${route.id}`)}
                     />
                   ))}
                 </div>
               )}
 
               {/* Selected Route Actions (Save offline / Detailed navigation) */}
-              {selectedRoute && (
+              {selectedRoute && !selectedNeedsConfirmation && (
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 lg:sticky lg:bottom-0 lg:z-10 lg:shadow-floating">
                   <div className="text-xs font-semibold text-slate-600">
                     Selected Route Actions

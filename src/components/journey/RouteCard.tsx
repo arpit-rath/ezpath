@@ -23,6 +23,7 @@ interface RouteCardProps {
   onSelect: () => void;
   onOpenInspector: () => void;
   onViewDetails?: () => void;
+  confirmationRequired?: boolean;
 }
 
 export const RouteCard: React.FC<RouteCardProps> = ({
@@ -30,7 +31,8 @@ export const RouteCard: React.FC<RouteCardProps> = ({
   isSelected,
   onSelect,
   onOpenInspector,
-  onViewDetails
+  onViewDetails,
+  confirmationRequired = false,
 }) => {
   const isAffected = route.affectedByDisruption;
   const accessibilityStatus = route.accessibilityStatus
@@ -59,6 +61,7 @@ export const RouteCard: React.FC<RouteCardProps> = ({
       {/* Top badges & label */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-1.5 flex-wrap">
+          {confirmationRequired && <Badge variant="disruption">Confirmation needed</Badge>}
           {route.categoryTags.includes('fastest') && (
             <Badge variant="accessible">Fastest</Badge>
           )}

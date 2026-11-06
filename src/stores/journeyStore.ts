@@ -7,6 +7,7 @@ import {
   DisruptionEvent
 } from '../types';
 import { getApiClient } from '../services/api';
+import type { RouteSearchResult } from '../services/api/client';
 import {
   DEFAULT_DESTINATION_ID,
   DEFAULT_ORIGIN_ID,
@@ -91,6 +92,7 @@ interface JourneyState {
   departureTime: string;
   routes: JourneyRoute[];
   selectedRouteId: string | null;
+  decision: RouteSearchResult['decision'] | null;
   hoveredRouteId: string | null;
   isLoading: boolean;
   isReplanning: boolean;
@@ -137,6 +139,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
   departureTime: new Date().toISOString(),
   routes: [],
   selectedRouteId: null,
+  decision: null,
   hoveredRouteId: null,
   isLoading: false,
   isReplanning: false,
@@ -146,18 +149,23 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
   isConstraintInspectorOpen: false,
   isComparisonModalOpen: false,
 
-  setOriginId: (id) => set({ originId: id }),
-  setDestinationId: (id) => set({ destinationId: id }),
+  setOriginId: (id) => { latestSearch++; set({ originId: id, routes: [], selectedRouteId: null, decision: null, isLoading: false }); },
+  setDestinationId: (id) => { latestSearch++; set({ destinationId: id, routes: [], selectedRouteId: null, decision: null, isLoading: false }); },
   swapLocations: () => {
+    latestSearch++;
     const { originId, destinationId } = get();
-    set({ originId: destinationId, destinationId: originId });
+    set({ originId: destinationId, destinationId: originId, routes: [], selectedRouteId: null, decision: null, isLoading: false });
   },
   setProfile: (profileId) => {
+    latestSearch++;
     const template = DEFAULT_PROFILES[profileId] || DEFAULT_PROFILES.custom;
-    set((state) => ({ profile: { ...template, allowedModes: state.profile.allowedModes } }));
+    set((state) => ({ profile: { ...template, allowedModes: state.profile.allowedModes },
+      routes: [], selectedRouteId: null, decision: null, isLoading: false }));
   },
   updateProfileConstraint: (key, value) => {
+    latestSearch++;
     set((state) => ({
+      routes: [], selectedRouteId: null, decision: null, isLoading: false,
       profile: {
         ...state.profile,
         [key]: value,
@@ -166,7 +174,9 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
     }));
   },
   setAllowedModes: (modes) => {
-    set((state) => ({ profile: { ...state.profile, allowedModes: modes } }));
+    latestSearch++;
+    set((state) => ({ profile: { ...state.profile, allowedModes: modes },
+      routes: [], selectedRouteId: null, decision: null, isLoading: false }));
     void get().searchJourneys();
   },
   setSelectedRouteId: (id) => set({ selectedRouteId: id }),
@@ -191,9 +201,11 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       });
 
       if (searchId !== latestSearch) return;
-      const selectedId = result.routes.length > 0 ? result.routes[0].id : null;
+      const selectedId = result.decision?.status === 'NEEDS_CONFIRMATION'
+        || result.decision?.status === 'OPTIONS_ONLY' ? null : result.routes[0]?.id ?? null;
       set({
         routes: result.routes,
+        decision: result.decision ?? null,
         selectedRouteId: selectedId,
         error: result.routes.length === 0
           ? result.message || 'No route satisfies the selected accessibility constraints.'
@@ -205,6 +217,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       set({
         routes: [],
         selectedRouteId: null,
+        decision: null,
         error: err.message || 'Failed to calculate journeys. Please check your constraints.',
         isLoading: false
       });

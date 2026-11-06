@@ -21,6 +21,7 @@ export interface AwsJourneyRequest {
   departure_time: string;
   profile: {
     wheelchair_user: boolean;
+    requires_lift_status: boolean;
     unknown_accessibility_policy: 'strict' | 'relaxed';
     walking_speed_mps: number;
   };
@@ -65,6 +66,9 @@ export interface AwsJourneyResponse {
   journeys: AwsJourney[];
   message: string | null;
   transit: { sources: Array<{ id: string; name: string }> };
+  decision?: { status: 'READY' | 'NEEDS_CONFIRMATION' | 'OPTIONS_ONLY'; missingFacts: Array<{
+    question: string; whyItMatters?: string; affectedRouteIds: string[];
+  }> };
 }
 
 const MODE_NAMES: Record<BackendMode, string> = { bus: 'Bus', metro: 'Metro', rail: 'Suburban train' };
@@ -103,6 +107,7 @@ export function buildAwsJourneyRequest(request: JourneySearchRequest, requestId:
         || request.profile.requireStepFree
         || request.profile.requireWheelchairBoarding
         || request.profile.avoidStairs,
+      requires_lift_status: request.profile.requireOperationalLiftOrRamp,
       unknown_accessibility_policy: request.profile.strictVerification ? 'strict' : 'relaxed',
       walking_speed_mps: 1.0,
     },
@@ -244,6 +249,7 @@ export function mapAwsJourneyResponse(
   timestamp = new Date().toISOString(),
 ): JourneyRoute[] {
   const routes = response.journeys.map((journey) => mapJourney(journey, request, timestamp));
+  if (response.decision?.status !== undefined && response.decision.status !== 'READY') return routes;
   if (routes.length === 0) return routes;
   const fastest = Math.min(...routes.map((route) => route.totalDurationMinutes));
   const leastWalking = Math.min(...routes.map((route) => route.walkingDistanceMeters));
